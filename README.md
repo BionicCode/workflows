@@ -9,6 +9,7 @@ Central repository of reusable GitHub Actions workflows that can be called from 
 | CI | [`ci.yml`](.github/workflows/ci.yml) | Build and test a project, with optional artifact upload |
 | Release | [`release.yml`](.github/workflows/release.yml) | Create a GitHub Release and optionally attach build artifacts |
 | Lint | [`lint.yml`](.github/workflows/lint.yml) | Run code-quality checks (.NET format, Node.js/npm lint) |
+| Sync .editorconfig on every push | [`sync-editorconfig-on-push.yml`](.github/workflows/sync-editorconfig-on-push.yml) | Synchronizes the Visual Studio .editorconfig file with the latest version defined in the [bionic-code-style](https://github.com/BionicCode/bioniccode-code-style) repository |
 
 ---
 
