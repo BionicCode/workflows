@@ -1,0 +1,76 @@
+name: Reusable Lint Workflow
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: The runner to use for the job (e.g. ubuntu-latest, windows-latest, macos-latest).
+        type: string
+        required: false
+        default: ubuntu-latest
+      dotnet-version:
+        description: The .NET SDK version to use for .NET format checks (e.g. 9.0.x). Leave empty to skip .NET format.
+        type: string
+        required: false
+        default: ''
+      node-version:
+        description: The Node.js version to use for JavaScript/TypeScript linting (e.g. 20). Leave empty to skip Node.js lint.
+        type: string
+        required: false
+        default: ''
+      dotnet-format-command:
+        description: The command used to run .NET code format verification.
+        type: string
+        required: false
+        default: dotnet format --verify-no-changes
+      node-lint-command:
+        description: The command used to run the Node.js/npm lint script.
+        type: string
+        required: false
+        default: npm run lint
+      working-directory:
+        description: The working directory in which to run the lint commands.
+        type: string
+        required: false
+        default: '.'
+    secrets:
+      token:
+        description: GitHub token used for authenticated API calls.
+        required: false
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        if: inputs.dotnet-version != ''
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Run .NET format check
+        if: inputs.dotnet-version != ''
+        run: ${{ inputs.dotnet-format-command }}
+
+      - name: Setup Node.js
+        if: inputs.node-version != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Install Node.js dependencies
+        if: inputs.node-version != ''
+        run: npm ci
+
+      - name: Run Node.js lint
+        if: inputs.node-version != ''
+        run: ${{ inputs.node-lint-command }}
