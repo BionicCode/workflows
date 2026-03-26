@@ -1,7 +1,6 @@
 name: Sync .editorconfig from canonical (PR-only)
 
-on:
-  
+on:  
   workflow_call:
     inputs:
       canonical_raw_url:
