@@ -1,6 +1,6 @@
 name: Sync .editorconfig from canonical (PR-only)
 
-on:  
+on:
   workflow_call:
     inputs:
       canonical_raw_url:
@@ -10,49 +10,57 @@ on:
         required: false
         type: string
         default: "chore/sync-editorconfig"
-  
+
 permissions:
   contents: write
   pull-requests: write
 
 env:
-  # Your canonical raw URL (as provided)
-  CANONICAL_RAW_URL: https://raw.githubusercontent.com/BionicCode/bioniccode-code-style/refs/heads/main/BionicCode.CodeStyle/BionicCode.CodeStyle/.editorconfig
-  SYNC_BRANCH_PREFIX: chore/sync-editorconfig
+  CANONICAL_RAW_URL: ${{ inputs.canonical_raw_url }}
+  SYNC_BRANCH_PREFIX: ${{ inputs.sync_branch_prefix }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# Avoid cross-branch cancellations; scope concurrency per PR number or per ref.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # 1) PR guard: fail early if the PR branch is out of sync with canonical.
   verify-on-pr:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout PR head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 1
 
       - name: Download canonical .editorconfig
+        shell: bash
         run: |
           set -euo pipefail
           curl -fsSL "${CANONICAL_RAW_URL}" -o canonical.editorconfig
 
-      - name: Ensure exactly one tracked .editorconfig (repo root)
+      - name: Ensure root .editorconfig exists and no nested tracked .editorconfig files exist
+        shell: bash
         run: |
           set -euo pipefail
-          count="$(git ls-files '**/.editorconfig' | wc -l | tr -d ' ')"
-          if [ "${count}" -ne 1 ]; then
-            echo "::error::Expected exactly one tracked .editorconfig (repo root). Found: ${count}"
-            git ls-files '**/.editorconfig' || true
+
+          if [ ! -f .editorconfig ]; then
+            echo "::error::Expected .editorconfig at repository root."
+            exit 1
+          fi
+
+          nested_count="$(git ls-files '*/.editorconfig' '**/.editorconfig' | awk '$0 != ".editorconfig"' | sort -u | wc -l | tr -d ' ')"
+          if [ "${nested_count}" -ne 0 ]; then
+            echo "::error::Expected only one tracked .editorconfig at repository root. Found nested tracked .editorconfig files:"
+            git ls-files '*/.editorconfig' '**/.editorconfig' | awk '$0 != ".editorconfig"' | sort -u || true
             exit 1
           fi
 
       - name: Fail if .editorconfig is out of sync
+        shell: bash
         run: |
           set -euo pipefail
           if cmp -s .editorconfig canonical.editorconfig; then
@@ -62,29 +70,29 @@ jobs:
             exit 1
           fi
 
-  # 2) PR creator/updater: on push/workflow_dispatch, create or update a sync PR into the *current branch*.
   open-or-update-sync-pr:
     if: >
       github.event_name != 'pull_request' &&
       startsWith(github.ref, 'refs/heads/') &&
       github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+
     steps:
       - name: Determine base branch
         id: base
         shell: bash
         run: |
           set -euo pipefail
-          # For push & workflow_dispatch on a branch, github.ref_name is the branch name.
           echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout base branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ steps.base.outputs.name }}
           fetch-depth: 0
 
       - name: Download canonical .editorconfig
+        shell: bash
         run: |
           set -euo pipefail
           curl -fsSL "${CANONICAL_RAW_URL}" -o canonical.editorconfig
@@ -103,14 +111,14 @@ jobs:
           mv canonical.editorconfig .editorconfig
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Compute sync branch name (per base branch)
+      - name: Compute sync branch name
         if: steps.diff.outputs.changed == 'true'
         id: syncbranch
         shell: bash
         run: |
           set -euo pipefail
           base="${{ steps.base.outputs.name }}"
-          safe="$(echo "$base" | tr '/ ' '--')"
+          safe="$(printf '%s' "$base" | tr '/ ' '--')"
           echo "name=${SYNC_BRANCH_PREFIX}/${safe}" >> "$GITHUB_OUTPUT"
 
       - name: Create or update PR into the base branch
@@ -125,13 +133,16 @@ jobs:
           body: |
             Automated sync of `.editorconfig` from the canonical repository.
 
-            Source: BionicCode/bioniccode-code-style (main)
+            Source: ${{
+              inputs.canonical_raw_url
+            }}
           add-paths: |
             .editorconfig
           labels: automation
 
       - name: Report PR result
         if: steps.diff.outputs.changed == 'true'
+        shell: bash
         run: |
           echo "PR number: ${{ steps.cpr.outputs.pull-request-number }}"
           echo "PR URL:    ${{ steps.cpr.outputs.pull-request-url }}"
