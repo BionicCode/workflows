@@ -1,0 +1,96 @@
+name: Reusable Release Workflow
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: The runner to use for the job (e.g. ubuntu-latest, windows-latest, macos-latest).
+        type: string
+        required: false
+        default: ubuntu-latest
+      tag:
+        description: The release tag (e.g. v1.0.0). Defaults to the tag that triggered the workflow.
+        type: string
+        required: false
+        default: ${{ github.ref_name }}
+      release-name:
+        description: The display name of the release. Defaults to the tag name.
+        type: string
+        required: false
+        default: ''
+      body:
+        description: The release description / changelog text.
+        type: string
+        required: false
+        default: ''
+      draft:
+        description: Whether to create the release as a draft.
+        type: boolean
+        required: false
+        default: false
+      prerelease:
+        description: Whether to mark the release as a pre-release.
+        type: boolean
+        required: false
+        default: false
+      artifact-name:
+        description: The name of an existing workflow artifact to attach to the release. Leave empty to skip.
+        type: string
+        required: false
+        default: ''
+      artifact-path:
+        description: The destination path for the downloaded artifact inside the runner.
+        type: string
+        required: false
+        default: release-artifacts
+    secrets:
+      token:
+        description: GitHub token with permissions to create releases and upload assets.
+        required: true
+    outputs:
+      release-url:
+        description: The URL of the created GitHub release.
+        value: ${{ jobs.release.outputs.release-url }}
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ${{ inputs.runs-on }}
+    outputs:
+      release-url: ${{ steps.create-release-no-assets.outputs.html_url || steps.create-release-with-assets.outputs.html_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        if: inputs.artifact-name != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-path }}
+
+      - name: Create GitHub Release (without assets)
+        id: create-release-no-assets
+        if: inputs.artifact-name == ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.release-name != '' && inputs.release-name || inputs.tag }}
+          body: ${{ inputs.body }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          token: ${{ secrets.token }}
+
+      - name: Create GitHub Release (with assets)
+        id: create-release-with-assets
+        if: inputs.artifact-name != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.release-name != '' && inputs.release-name || inputs.tag }}
+          body: ${{ inputs.body }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          files: ${{ format('{0}/**', inputs.artifact-path) }}
+          token: ${{ secrets.token }}

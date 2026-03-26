@@ -1,0 +1,102 @@
+name: Reusable CI Workflow
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: The runner to use for the job (e.g. ubuntu-latest, windows-latest, macos-latest).
+        type: string
+        required: false
+        default: ubuntu-latest
+      dotnet-version:
+        description: The .NET SDK version to use (e.g. 9.0.x, 8.0.x). Leave empty to skip .NET setup.
+        type: string
+        required: false
+        default: ''
+      node-version:
+        description: The Node.js version to use (e.g. 20, 18). Leave empty to skip Node.js setup.
+        type: string
+        required: false
+        default: ''
+      build-command:
+        description: The shell command used to build the project.
+        type: string
+        required: false
+        default: ''
+      test-command:
+        description: The shell command used to run the tests.
+        type: string
+        required: false
+        default: ''
+      working-directory:
+        description: The working directory in which to run the build and test commands.
+        type: string
+        required: false
+        default: '.'
+      artifact-name:
+        description: The name of the artifact to upload. Leave empty to skip artifact upload.
+        type: string
+        required: false
+        default: ''
+      artifact-path:
+        description: The path of the files to include in the uploaded artifact.
+        type: string
+        required: false
+        default: ''
+    secrets:
+      token:
+        description: GitHub token used for authenticated API calls.
+        required: false
+    outputs:
+      artifact-name:
+        description: The name of the uploaded artifact (empty when no artifact was uploaded).
+        value: ${{ jobs.ci.outputs.artifact-name }}
+
+jobs:
+  ci:
+    name: Build & Test
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      artifact-name: ${{ steps.artifact-output.outputs.artifact-name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        if: inputs.dotnet-version != ''
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Setup Node.js
+        if: inputs.node-version != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Build
+        if: inputs.build-command != ''
+        run: ${{ inputs.build-command }}
+
+      - name: Test
+        if: inputs.test-command != ''
+        run: ${{ inputs.test-command }}
+
+      - name: Upload artifact
+        id: upload
+        if: inputs.artifact-name != '' && inputs.artifact-path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: warn
+
+      - name: Set artifact name output
+        if: inputs.artifact-name != '' && inputs.artifact-path != ''
+        id: artifact-output
+        run: echo "artifact-name=${{ inputs.artifact-name }}" >> "$GITHUB_OUTPUT"
