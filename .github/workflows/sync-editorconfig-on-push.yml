@@ -1,4 +1,4 @@
-name: Sync .editorconfig from canonical (PR-only)
+name: DEPRECATED - Sync .editorconfig from canonical (legacy path)
 
 on:
   workflow_call:

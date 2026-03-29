@@ -1,0 +1,197 @@
+name: Sync files from manifest
+
+on:
+  workflow_call:
+    inputs:
+      manifest_json:
+        description: JSON manifest describing source-to-target file mappings.
+        required: true
+        type: string
+      sync_branch_prefix:
+        description: Branch prefix for generated sync pull requests.
+        required: false
+        type: string
+        default: chore/sync-managed-files
+    secrets:
+      source_token:
+        description: Optional read-only token for private cross-repo source reads.
+        required: false
+
+env:
+  WORKFLOW_IMPLEMENTATION_PATH: .github/_sync-files-from-manifest-workflow
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: sync-files-from-manifest-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-on-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+
+      - name: Determine workflow implementation repository
+        id: workflowrepo
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow_ref='${{ github.workflow_ref }}'
+          echo "repository=${workflow_ref%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout workflow implementation
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ steps.workflowrepo.outputs.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: ${{ env.WORKFLOW_IMPLEMENTATION_PATH }}
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ secrets.source_token || github.token }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Validate manifest
+        id: validate
+        shell: bash
+        env:
+          MANIFEST_JSON: ${{ inputs.manifest_json }}
+        run: |
+          set -euo pipefail
+          python "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/validate_manifest.py" \
+            --manifest-json "$MANIFEST_JSON" \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --normalized-manifest-path "$RUNNER_TEMP/normalized-sync-manifest.json"
+
+      - name: Verify tracked targets are in sync
+        shell: bash
+        env:
+          SOURCE_TOKEN: ${{ secrets.source_token }}
+        run: |
+          set -euo pipefail
+          python "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/sync_files.py" \
+            --mode verify \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --normalized-manifest-path "${{ steps.validate.outputs.normalized_manifest_path }}"
+
+  open-or-update-sync-pr:
+    if: >
+      github.event_name != 'pull_request' &&
+      startsWith(github.ref, 'refs/heads/') &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Determine base branch
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout base branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.base.outputs.name }}
+          fetch-depth: 0
+
+      - name: Determine workflow implementation repository
+        id: workflowrepo
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow_ref='${{ github.workflow_ref }}'
+          echo "repository=${workflow_ref%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout workflow implementation
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ steps.workflowrepo.outputs.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: ${{ env.WORKFLOW_IMPLEMENTATION_PATH }}
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ secrets.source_token || github.token }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Validate manifest
+        id: validate
+        shell: bash
+        env:
+          MANIFEST_JSON: ${{ inputs.manifest_json }}
+        run: |
+          set -euo pipefail
+          python "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/validate_manifest.py" \
+            --manifest-json "$MANIFEST_JSON" \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --normalized-manifest-path "$RUNNER_TEMP/normalized-sync-manifest.json"
+
+      - name: Synchronize manifest-managed files
+        id: sync
+        shell: bash
+        env:
+          SOURCE_TOKEN: ${{ secrets.source_token }}
+        run: |
+          set -euo pipefail
+          python "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/sync_files.py" \
+            --mode sync \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --normalized-manifest-path "${{ steps.validate.outputs.normalized_manifest_path }}"
+
+      - name: Compute sync branch name
+        if: steps.sync.outputs.changed == 'true'
+        id: syncbranch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ steps.base.outputs.name }}"
+          safe="$(printf '%s' "$base" | tr '/[:space:]' '--' | tr -cd '[:alnum:]._-')"
+          if [ -z "$safe" ]; then
+            safe="branch"
+          fi
+          echo "name=${{ inputs.sync_branch_prefix }}/${safe}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update sync PR
+        if: steps.sync.outputs.changed == 'true'
+        id: cpr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: ${{ steps.syncbranch.outputs.name }}
+          base: ${{ steps.base.outputs.name }}
+          title: "chore: sync manifest-managed files"
+          commit-message: "chore(sync): update manifest-managed files"
+          body: ${{ steps.sync.outputs.pull_request_body }}
+          add-paths: ${{ steps.sync.outputs.changed_paths }}
+          labels: automation
+
+      - name: Report PR result
+        if: steps.sync.outputs.changed == 'true'
+        shell: bash
+        run: |
+          echo "Changed files: ${{ steps.sync.outputs.changed_count }}"
+          echo "PR number: ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "PR URL:    ${{ steps.cpr.outputs.pull-request-url }}"
+
+      - name: Report no-op run
+        if: steps.sync.outputs.changed != 'true'
+        shell: bash
+        run: |
+          echo "No manifest-managed files changed. No sync PR created."
