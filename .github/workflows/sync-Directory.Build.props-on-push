@@ -1,0 +1,148 @@
+name: Sync .editorconfig from canonical (PR-only)
+
+on:
+  workflow_call:
+    inputs:
+      canonical_raw_url:
+        required: true
+        type: string
+      sync_branch_prefix:
+        required: false
+        type: string
+        default: "chore/sync-editorconfig"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CANONICAL_RAW_URL: ${{ inputs.canonical_raw_url }}
+  SYNC_BRANCH_PREFIX: ${{ inputs.sync_branch_prefix }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-on-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+
+      - name: Download canonical .editorconfig
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "${CANONICAL_RAW_URL}" -o canonical.editorconfig
+
+      - name: Ensure root .editorconfig exists and no nested tracked .editorconfig files exist
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -f .editorconfig ]; then
+            echo "::error::Expected .editorconfig at repository root."
+            exit 1
+          fi
+
+          nested_count="$(git ls-files '*/.editorconfig' '**/.editorconfig' | awk '$0 != ".editorconfig"' | sort -u | wc -l | tr -d ' ')"
+          if [ "${nested_count}" -ne 0 ]; then
+            echo "::error::Expected only one tracked .editorconfig at repository root. Found nested tracked .editorconfig files:"
+            git ls-files '*/.editorconfig' '**/.editorconfig' | awk '$0 != ".editorconfig"' | sort -u || true
+            exit 1
+          fi
+
+      - name: Fail if .editorconfig is out of sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          if cmp -s .editorconfig canonical.editorconfig; then
+            echo ".editorconfig is in sync with canonical."
+          else
+            echo "::error::.editorconfig is OUT OF SYNC with canonical. Merge the sync PR created by this workflow."
+            exit 1
+          fi
+
+  open-or-update-sync-pr:
+    if: >
+      github.event_name != 'pull_request' &&
+      startsWith(github.ref, 'refs/heads/') &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Determine base branch
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout base branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.base.outputs.name }}
+          fetch-depth: 0
+
+      - name: Download canonical .editorconfig
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "${CANONICAL_RAW_URL}" -o canonical.editorconfig
+
+      - name: Apply canonical .editorconfig if changed
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f .editorconfig ] && cmp -s .editorconfig canonical.editorconfig; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mv canonical.editorconfig .editorconfig
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Compute sync branch name
+        if: steps.diff.outputs.changed == 'true'
+        id: syncbranch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ steps.base.outputs.name }}"
+          safe="$(printf '%s' "$base" | tr '/ ' '--')"
+          echo "name=${SYNC_BRANCH_PREFIX}/${safe}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update PR into the base branch
+        if: steps.diff.outputs.changed == 'true'
+        id: cpr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: ${{ steps.syncbranch.outputs.name }}
+          base: ${{ steps.base.outputs.name }}
+          title: "chore: sync .editorconfig from canonical"
+          commit-message: "chore(sync): update .editorconfig from canonical"
+          body: |
+            Automated sync of `.editorconfig` from the canonical repository.
+
+            Source: ${{
+              inputs.canonical_raw_url
+            }}
+          add-paths: |
+            .editorconfig
+          labels: automation
+
+      - name: Report PR result
+        if: steps.diff.outputs.changed == 'true'
+        shell: bash
+        run: |
+          echo "PR number: ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "PR URL:    ${{ steps.cpr.outputs.pull-request-url }}"
