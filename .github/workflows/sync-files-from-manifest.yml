@@ -3,10 +3,16 @@ name: Sync files from manifest
 on:
   workflow_call:
     inputs:
-      manifest_json:
-        description: JSON manifest describing source-to-target file mappings.
-        required: true
+      command:
+        description: Command to run. Supported values are init, validate, and sync.
+        required: false
         type: string
+        default: sync
+      manifest_json:
+        description: JSON manifest describing source-to-target file mappings. Required for validate and sync.
+        required: false
+        type: string
+        default: ""
       sync_branch_prefix:
         description: Branch prefix for generated sync pull requests.
         required: false
@@ -18,49 +24,180 @@ on:
         required: false
 
 env:
-  WORKFLOW_IMPLEMENTATION_PATH: .github/_sync-files-from-manifest-workflow
+  WORKFLOW_IMPLEMENTATION_PATH: _sync-files-from-manifest-workflow
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  group: sync-files-from-manifest-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  group: called-sync-files-from-manifest-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify-on-pr:
-    if: github.event_name == 'pull_request'
+  validate-command:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    permissions: {}
+    outputs:
+      command: ${{ steps.validate.outputs.command }}
 
     steps:
-      - name: Checkout PR head
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 1
+      - name: Validate command input
+        id: validate
+        shell: bash
+        env:
+          COMMAND: ${{ inputs.command }}
+          MANIFEST_JSON: ${{ inputs.manifest_json }}
+        run: |
+          set -euo pipefail
 
-      - name: Determine workflow implementation repository
-        id: workflowrepo
+          case "$COMMAND" in
+            init|validate|sync)
+              ;;
+            *)
+              echo "::error::Unsupported command '$COMMAND'. Supported values are init, validate, and sync."
+              exit 1
+              ;;
+          esac
+
+          if [ "$COMMAND" = "init" ] && [ -n "$MANIFEST_JSON" ]; then
+            echo "::error::manifest_json must not be provided when command=init."
+            exit 1
+          fi
+
+          if [ "$COMMAND" != "init" ] && [ -z "$MANIFEST_JSON" ]; then
+            echo "::error::manifest_json is required when command=$COMMAND."
+            exit 1
+          fi
+
+          echo "command=$COMMAND" >> "$GITHUB_OUTPUT"
+
+  reject-unsupported-init-context:
+    needs: validate-command
+    if: >
+      needs.validate-command.outputs.command == 'init' &&
+      (github.event_name == 'pull_request' || !startsWith(github.ref, 'refs/heads/'))
+    runs-on: ubuntu-latest
+    permissions: {}
+
+    steps:
+      - name: Report unsupported init context
+        shell: bash
+        run: |
+          echo "::error::command=init must run from a branch context, not from pull_request or non-branch events."
+          exit 1
+
+  init-manifest:
+    needs: validate-command
+    if: >
+      needs.validate-command.outputs.command == 'init' &&
+      github.event_name != 'pull_request' &&
+      startsWith(github.ref, 'refs/heads/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Determine base branch
+        id: base
         shell: bash
         run: |
           set -euo pipefail
-          workflow_ref='${{ github.workflow_ref }}'
-          echo "repository=${workflow_ref%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
+          echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout caller repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.base.outputs.name }}
+          fetch-depth: 0
 
       - name: Checkout workflow implementation
         uses: actions/checkout@v5
         with:
-          repository: ${{ steps.workflowrepo.outputs.repository }}
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: ${{ env.WORKFLOW_IMPLEMENTATION_PATH }}
           fetch-depth: 1
           persist-credentials: false
-          token: ${{ secrets.source_token || github.token }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            -r "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/requirements.txt"
+
+      - name: Initialize caller manifest configuration
+        id: init
+        shell: bash
+        run: |
+          set -euo pipefail
+          python "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/init_manifest.py" \
+            --repo-root "$GITHUB_WORKSPACE"
+
+      - name: Create or update initialization PR
+        if: steps.init.outputs.changed == 'true'
+        id: cpr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: chore/init-managed-file-sync
+          base: ${{ steps.base.outputs.name }}
+          title: "chore: initialize managed-file sync manifest"
+          commit-message: "chore(sync): initialize managed-file manifest"
+          body: ${{ steps.init.outputs.pull_request_body }}
+          add-paths: ${{ steps.init.outputs.changed_paths }}
+          labels: automation
+
+      - name: Report initialization PR result
+        if: steps.init.outputs.changed == 'true'
+        shell: bash
+        run: |
+          echo "Changed files: ${{ steps.init.outputs.changed_count }}"
+          echo "PR number: ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "PR URL:    ${{ steps.cpr.outputs.pull-request-url }}"
+
+      - name: Report no-op initialization
+        if: steps.init.outputs.changed != 'true'
+        shell: bash
+        run: |
+          echo "Caller manifest configuration is already initialized. No PR created."
+
+  validate-only:
+    needs: validate-command
+    if: needs.validate-command.outputs.command == 'validate'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Checkout workflow implementation
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: ${{ env.WORKFLOW_IMPLEMENTATION_PATH }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            -r "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/requirements.txt"
 
       - name: Validate manifest
         id: validate
@@ -70,7 +207,63 @@ jobs:
         run: |
           set -euo pipefail
           python "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/validate_manifest.py" \
-            --manifest-json "$MANIFEST_JSON" \
+            --manifest-json-env MANIFEST_JSON \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --normalized-manifest-path "$RUNNER_TEMP/normalized-sync-manifest.json"
+
+      - name: Report validation result
+        shell: bash
+        run: |
+          echo "Validated manifest entries: ${{ steps.validate.outputs.manifest_entry_count }}"
+          echo "Normalized manifest: ${{ steps.validate.outputs.normalized_manifest_path }}"
+
+  verify-on-pr:
+    needs: validate-command
+    if: >
+      needs.validate-command.outputs.command == 'sync' &&
+      github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Checkout workflow implementation
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: ${{ env.WORKFLOW_IMPLEMENTATION_PATH }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            -r "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/requirements.txt"
+
+      - name: Validate manifest
+        id: validate
+        shell: bash
+        env:
+          MANIFEST_JSON: ${{ inputs.manifest_json }}
+        run: |
+          set -euo pipefail
+          python "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/validate_manifest.py" \
+            --manifest-json-env MANIFEST_JSON \
             --repo-root "$GITHUB_WORKSPACE" \
             --normalized-manifest-path "$RUNNER_TEMP/normalized-sync-manifest.json"
 
@@ -86,7 +279,9 @@ jobs:
             --normalized-manifest-path "${{ steps.validate.outputs.normalized_manifest_path }}"
 
   open-or-update-sync-pr:
+    needs: validate-command
     if: >
+      needs.validate-command.outputs.command == 'sync' &&
       github.event_name != 'pull_request' &&
       startsWith(github.ref, 'refs/heads/') &&
       github.actor != 'github-actions[bot]'
@@ -109,28 +304,26 @@ jobs:
           ref: ${{ steps.base.outputs.name }}
           fetch-depth: 0
 
-      - name: Determine workflow implementation repository
-        id: workflowrepo
-        shell: bash
-        run: |
-          set -euo pipefail
-          workflow_ref='${{ github.workflow_ref }}'
-          echo "repository=${workflow_ref%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
-
       - name: Checkout workflow implementation
         uses: actions/checkout@v5
         with:
-          repository: ${{ steps.workflowrepo.outputs.repository }}
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: ${{ env.WORKFLOW_IMPLEMENTATION_PATH }}
           fetch-depth: 1
           persist-credentials: false
-          token: ${{ secrets.source_token || github.token }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            -r "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/requirements.txt"
 
       - name: Validate manifest
         id: validate
@@ -140,7 +333,7 @@ jobs:
         run: |
           set -euo pipefail
           python "$GITHUB_WORKSPACE/${WORKFLOW_IMPLEMENTATION_PATH}/.github/scripts/sync-files-from-manifest/validate_manifest.py" \
-            --manifest-json "$MANIFEST_JSON" \
+            --manifest-json-env MANIFEST_JSON \
             --repo-root "$GITHUB_WORKSPACE" \
             --normalized-manifest-path "$RUNNER_TEMP/normalized-sync-manifest.json"
 
@@ -163,7 +356,7 @@ jobs:
         run: |
           set -euo pipefail
           base="${{ steps.base.outputs.name }}"
-          safe="$(printf '%s' "$base" | tr '/[:space:]' '--' | tr -cd '[:alnum:]._-')"
+          safe="$(printf '%s' "$base" | sed -E 's#[/[:space:]]+#-#g; s#[^A-Za-z0-9._-]+#-#g; s#-+#-#g; s#^-+|-+$##g')"
           if [ -z "$safe" ]; then
             safe="branch"
           fi

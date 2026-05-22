@@ -1,181 +1,110 @@
 # Reusable Workflows
 
-Central repository of reusable GitHub Actions workflows that can be called from any repository in the organization.
+Central repository of reusable GitHub Actions workflows for BionicCode repositories.
 
 ## Available Workflows
 
 | Workflow | File | Description |
 |---|---|---|
-| CI | [`ci.yml`](.github/workflows/ci.yml) | Build and test a project, with optional artifact upload |
-| Release | [`release.yml`](.github/workflows/release.yml) | Create a GitHub Release and optionally attach build artifacts |
-| Lint | [`lint.yml`](.github/workflows/lint.yml) | Run code-quality checks (.NET format, Node.js/npm lint) |
-| Sync files from manifest | [`sync-files-from-manifest.yml`](.github/workflows/sync-files-from-manifest.yml) | Generic reusable sync workflow driven by a JSON manifest |
-| Deprecated: Sync `.editorconfig` from canonical | [`sync-editorconfig-on-push.yml`](.github/workflows/sync-editorconfig-on-push.yml) | Legacy `.editorconfig`-specific workflow kept temporarily for migration |
+| CI | `.github/workflows/ci.yml` | Build and test projects with optional artifact upload. |
+| Release | `.github/workflows/release.yml` | Create a GitHub Release and optionally attach build artifacts. |
+| Lint | `.github/workflows/lint.yml` | Run .NET and Node.js code-quality checks. |
+| Sync files from manifest | `.github/workflows/sync-files-from-manifest.yml` | Generic managed-file sync workflow driven by caller-owned manifests. |
+| Deprecated: Sync `.editorconfig` | `.github/workflows/sync-editorconfig-on-push.yml` | Legacy `.editorconfig`-specific migration path. |
 
----
-
-## Usage
-
-Reference any workflow in this repository using the `uses` key with the format:
+Reference reusable workflows with:
 
 ```yaml
-BionicCode/workflows/.github/workflows/<workflow-file>.yml@<ref>
+uses: BionicCode/workflows/.github/workflows/<workflow-file>.yml@<ref>
 ```
 
-where `<ref>` is a branch name (for example `main`), a tag, or a full commit SHA.
+Using `@main` is acceptable during development and early testing. After release, descendant repositories should pin reusable workflows to a tag or full commit SHA for stability and supply-chain safety.
 
----
+## Managed-File Sync Ownership
 
-### CI Workflow (`ci.yml`)
+`BionicCode/workflows` owns the reusable managed-file sync engine:
 
-Builds and tests a project. Supports .NET and Node.js out of the box; other runtimes can be driven by supplying custom `build-command` and `test-command` values.
+- `.github/workflows/sync-files-from-manifest.yml`
+- `.github/scripts/sync-files-from-manifest/schema/sync-manifest.schema.json`
+- `.github/scripts/sync-files-from-manifest/schema/sync-rules.json`
+- `.github/scripts/sync-files-from-manifest/templates/sync-manifest.template.json`
+- `.github/scripts/sync-files-from-manifest/*.py`
 
-**Inputs**
+Each caller repository owns its manifest at:
 
-| Input | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `runs-on` | string | No | `ubuntu-latest` | Runner label |
-| `dotnet-version` | string | No | _(empty)_ | .NET SDK version (for example `9.0.x`). Skipped when empty. |
-| `node-version` | string | No | _(empty)_ | Node.js version (for example `20`). Skipped when empty. |
-| `build-command` | string | No | _(empty)_ | Shell command to build the project |
-| `test-command` | string | No | _(empty)_ | Shell command to run the tests |
-| `working-directory` | string | No | `.` | Working directory for build and test commands |
-| `artifact-name` | string | No | _(empty)_ | Name for the uploaded artifact. Skipped when empty. |
-| `artifact-path` | string | No | _(empty)_ | Path of files to include in the artifact |
+```text
+.github/sync-config/sync-manifest.json
+```
 
-**Secrets**
+The schema copied to caller repositories at `.github/sync-config/sync-manifest.schema.json` is for editor tooling, documentation, and human guidance. Authoritative validation always uses the schema bundled with the exact reusable workflow version being executed.
 
-| Secret | Required | Description |
-|---|---|---|
-| `token` | No | GitHub token for authenticated API calls |
+`template-visual-studio-repository` owns the real default manifest for Visual Studio template descendants. New repositories created from that GitHub template inherit the caller workflow and manifest naturally, and may customize the manifest later.
 
-**Outputs**
+## Sync Files From Manifest
 
-| Output | Description |
-|---|---|
-| `artifact-name` | Name of the uploaded artifact (empty when no artifact was uploaded) |
-
-**Example**
+### Interface
 
 ```yaml
 jobs:
-  ci:
-    uses: BionicCode/workflows/.github/workflows/ci.yml@main
+  sync-managed-files:
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: BionicCode/workflows/.github/workflows/sync-files-from-manifest.yml@main
     with:
-      dotnet-version: 9.0.x
-      build-command: dotnet build --configuration Release
-      test-command: dotnet test --configuration Release --no-build
-      artifact-name: build-output
-      artifact-path: src/MyApp/bin/Release/net9.0/publish
-    secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
+      command: sync
+      manifest_json: ${{ needs.inspect-manifest.outputs.manifest_json }}
+    secrets: inherit
 ```
 
----
-
-### Release Workflow (`release.yml`)
-
-Creates a GitHub Release and optionally attaches artifacts that were produced in a previous job.
-
-**Inputs**
+Inputs:
 
 | Input | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `runs-on` | string | No | `ubuntu-latest` | Runner label |
-| `tag` | string | No | `${{ github.ref_name }}` | Release tag |
-| `release-name` | string | No | _(tag value)_ | Display name of the release |
-| `body` | string | No | _(empty)_ | Release description / changelog |
-| `draft` | boolean | No | `false` | Create the release as a draft |
-| `prerelease` | boolean | No | `false` | Mark the release as a pre-release |
-| `artifact-name` | string | No | _(empty)_ | Name of a workflow artifact to attach |
-| `artifact-path` | string | No | `release-artifacts` | Local path for the downloaded artifact |
+| `command` | string | No | `sync` | One of `init`, `validate`, or `sync`. Invalid values fail before checkout/fetch/write. |
+| `manifest_json` | string | For `validate` and `sync` | `""` | Object-shaped manifest JSON. Forbidden for `init`. |
+| `sync_branch_prefix` | string | No | `chore/sync-managed-files` | Branch prefix for generated sync PRs. |
 
-**Secrets**
+Secrets:
 
 | Secret | Required | Description |
 |---|---|---|
-| `token` | Yes | GitHub token with permissions to create releases and upload assets |
+| `source_token` | No | Optional read-only token for private cross-repo source reads. Public sources are read without it. |
 
-**Outputs**
+Caller jobs that invoke `init` or `sync` should grant `contents: write` and `pull-requests: write`. The reusable workflow narrows permissions at job level: PR verification uses `contents: read`; init and branch sync PR creation use `contents: write` and `pull-requests: write`.
 
-| Output | Description |
-|---|---|
-| `release-url` | URL of the created GitHub Release |
+### Commands
 
-**Example**
+- `init` copies or updates `.github/sync-config/sync-manifest.schema.json`, creates `.github/sync-config/sync-manifest.json` only when missing, opens or updates one initialization PR, and then stops. It does not fetch source files or sync managed files.
+- `validate` validates `manifest_json` against the bundled JSON Schema, runs semantic rules from `sync-rules.json`, writes a normalized manifest for diagnostics, and performs no fetch/write behavior.
+- `sync` validates first, writes the normalized manifest, and then verifies PRs or creates/updates one aggregated sync PR on branch events.
 
-```yaml
-jobs:
-  release:
-    uses: BionicCode/workflows/.github/workflows/release.yml@main
-    with:
-      tag: ${{ github.ref_name }}
-      release-name: Release ${{ github.ref_name }}
-    secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
+### Manifest Shape
+
+Object-shaped manifests are the only supported shape:
+
+```json
+{
+  "$schema": "./sync-manifest.schema.json",
+  "schema_version": 1,
+  "entries": [
+    {
+      "source_repo": "BionicCode/template-visual-studio-repository",
+      "source_ref": "main",
+      "source_path": "README.md",
+      "target_path": "README.md",
+      "direction": "source_to_target",
+      "lifecycle_policy": "seed_once",
+      "uniqueness_policy": "none",
+      "managed_scope": "whole_file"
+    }
+  ]
+}
 ```
 
----
+Old top-level array manifests are intentionally rejected. Wrap the array under `entries` and add `schema_version`.
 
-### Lint Workflow (`lint.yml`)
-
-Runs code-quality checks. Supports .NET format verification and Node.js/npm lint scripts.
-
-**Inputs**
-
-| Input | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `runs-on` | string | No | `ubuntu-latest` | Runner label |
-| `dotnet-version` | string | No | _(empty)_ | .NET SDK version. Skipped when empty. |
-| `node-version` | string | No | _(empty)_ | Node.js version. Skipped when empty. |
-| `dotnet-format-command` | string | No | `dotnet format --verify-no-changes` | .NET format verification command |
-| `node-lint-command` | string | No | `npm run lint` | Node.js lint command |
-| `working-directory` | string | No | `.` | Working directory for lint commands |
-
-**Secrets**
-
-| Secret | Required | Description |
-|---|---|---|
-| `token` | No | GitHub token for authenticated API calls |
-
-**Example**
-
-```yaml
-jobs:
-  lint:
-    uses: BionicCode/workflows/.github/workflows/lint.yml@main
-    with:
-      node-version: '20'
-```
-
----
-
-### Sync Files from Manifest Workflow (`sync-files-from-manifest.yml`)
-
-Reusable workflow that validates a JSON manifest, then verifies or synchronizes managed files in the caller repository using source-to-target mappings only.
-
-**Stage 1 interface**
-
-| Input | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `manifest_json` | string | Yes | _(none)_ | JSON manifest string describing file mappings and policy values |
-| `sync_branch_prefix` | string | No | `chore/sync-managed-files` | Branch prefix for generated sync PRs |
-
-**Secrets**
-
-| Secret | Required | Description |
-|---|---|---|
-| `source_token` | No | Optional read-only token for private cross-repo source reads |
-
-**Behavior**
-
-- On pull requests, the workflow validates the full manifest and fails if any enforced target is missing or out of sync.
-- On non-PR branch events, the workflow validates the full manifest, updates only changed managed files, and opens or updates one sync PR per base branch.
-- Validation happens before any sync writes.
-- Stage 1 supports only `direction: source_to_target` and `managed_scope: whole_file` execution.
-- Stage 1 recognizes marker-scoped policies in the schema, but fails fast with a clear v1 unsupported error if they are used.
-
-**Manifest entry fields**
+Each entry supports:
 
 - `source_repo`
 - `source_ref`
@@ -185,195 +114,80 @@ Reusable workflow that validates a JSON manifest, then verifies or synchronizes 
 - `lifecycle_policy`
 - `uniqueness_policy`
 - `managed_scope`
-- `markers` when `managed_scope` is `outside_markers` or `inside_markers`
+- `markers` only when required by marker-scoped managed scopes
 
-**Supported Stage 1 runtime policies**
+Stage 1 executes:
 
-- `lifecycle_policy`: `enforce`, `seed_once`, `disabled`
-- `uniqueness_policy`: `basename_unique`, `none`
-- `managed_scope`: `whole_file`
+- `direction: source_to_target`
+- `lifecycle_policy: enforce`, `seed_once`, `disabled`
+- `uniqueness_policy: basename_unique`, `none`
+- `managed_scope: whole_file`
 
-**Schema values recognized but deferred at runtime in Stage 1**
+The schema recognizes `managed_scope: outside_markers` and `managed_scope: inside_markers`, but Stage 1 rejects those entries before source fetch/write with a clear unsupported-in-v1 error.
 
-- `managed_scope: outside_markers`
-- `managed_scope: inside_markers`
+### Validation Model
 
-**Stage 1 executable example**
+JSON Schema is the source of truth for structural manifest metadata:
 
-```yaml
-jobs:
-  sync-managed-files:
-    uses: BionicCode/workflows/.github/workflows/sync-files-from-manifest.yml@main
-    with:
-      manifest_json: |
-        [
-          {
-            "source_repo": "BionicCode/bioniccode-code-style",
-            "source_ref": "main",
-            "source_path": ".editorconfig",
-            "target_path": ".editorconfig",
-            "direction": "source_to_target",
-            "lifecycle_policy": "enforce",
-            "uniqueness_policy": "basename_unique",
-            "managed_scope": "whole_file"
-          },
-          {
-            "source_repo": "BionicCode/bioniccode-code-style",
-            "source_ref": "main",
-            "source_path": "Directory.Build.props",
-            "target_path": "Directory.Build.props",
-            "direction": "source_to_target",
-            "lifecycle_policy": "enforce",
-            "uniqueness_policy": "none",
-            "managed_scope": "whole_file"
-          },
-          {
-            "source_repo": "BionicCode/template-visual-studio-repository",
-            "source_ref": "main",
-            "source_path": "README.md",
-            "target_path": "README.md",
-            "direction": "source_to_target",
-            "lifecycle_policy": "seed_once",
-            "uniqueness_policy": "none",
-            "managed_scope": "whole_file"
-          }
-        ]
-    secrets:
-      source_token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
-```
+- top-level object shape
+- required properties
+- allowed properties with `additionalProperties: false`
+- enum values
+- marker object shape
+- marker conditional requirements
+- schema version
 
-**Full contract example**
+Python semantic validation handles checks that require normalization, Git state, repository context, or cross-entry analysis:
 
-The Stage 1 parser already understands the fuller policy schema that Stage 2 will build on. Marker-scoped entries are valid manifest shapes, but they are not executable in Stage 1.
+- duplicate normalized source identities
+- duplicate normalized target paths
+- source/target basename mismatches
+- repository-relative safe paths
+- file-like paths only
+- reserved `_sync-files-from-manifest-workflow/` target paths
+- symlink targets and symlink parent directories
+- tracked-file scanning for `basename_unique`
+- Stage 1 rejection of schema-recognized but runtime-deferred policies
 
-```json
-[
-  {
-    "source_repo": "BionicCode/bioniccode-code-style",
-    "source_ref": "main",
-    "source_path": ".editorconfig",
-    "target_path": ".editorconfig",
-    "direction": "source_to_target",
-    "lifecycle_policy": "enforce",
-    "uniqueness_policy": "basename_unique",
-    "managed_scope": "whole_file"
-  },
-  {
-    "source_repo": "BionicCode/bioniccode-code-style",
-    "source_ref": "main",
-    "source_path": "Directory.Build.props",
-    "target_path": "Directory.Build.props",
-    "direction": "source_to_target",
-    "lifecycle_policy": "enforce",
-    "uniqueness_policy": "none",
-    "managed_scope": "whole_file"
-  },
-  {
-    "source_repo": "BionicCode/template-visual-studio-repository",
-    "source_ref": "main",
-    "source_path": "AGENTS.md",
-    "target_path": "AGENTS.md",
-    "direction": "source_to_target",
-    "lifecycle_policy": "enforce",
-    "uniqueness_policy": "none",
-    "managed_scope": "outside_markers",
-    "markers": {
-      "start": "<!-- BEGIN REPOSITORY SPECIFICS: repository owners may edit only this section -->",
-      "end": "<!-- END REPOSITORY SPECIFICS -->"
-    }
-  },
-  {
-    "source_repo": "BionicCode/template-visual-studio-repository",
-    "source_ref": "main",
-    "source_path": "src/AGENTS.md",
-    "target_path": "src/AGENTS.md",
-    "direction": "source_to_target",
-    "lifecycle_policy": "enforce",
-    "uniqueness_policy": "none",
-    "managed_scope": "whole_file"
-  },
-  {
-    "source_repo": "BionicCode/template-visual-studio-repository",
-    "source_ref": "main",
-    "source_path": ".github/copilot-instructions.md",
-    "target_path": ".github/copilot-instructions.md",
-    "direction": "source_to_target",
-    "lifecycle_policy": "enforce",
-    "uniqueness_policy": "none",
-    "managed_scope": "whole_file"
-  },
-  {
-    "source_repo": "BionicCode/template-visual-studio-repository",
-    "source_ref": "main",
-    "source_path": ".github/instructions/test.instructions.md",
-    "target_path": ".github/instructions/test.instructions.md",
-    "direction": "source_to_target",
-    "lifecycle_policy": "enforce",
-    "uniqueness_policy": "none",
-    "managed_scope": "whole_file"
-  },
-  {
-    "source_repo": "BionicCode/template-visual-studio-repository",
-    "source_ref": "main",
-    "source_path": "README.md",
-    "target_path": "README.md",
-    "direction": "source_to_target",
-    "lifecycle_policy": "seed_once",
-    "uniqueness_policy": "none",
-    "managed_scope": "whole_file"
-  }
-]
-```
+After validation, execution reads only the normalized manifest file produced by validation. `sync_files.py` does not reinterpret raw `manifest_json`.
 
-**Validation rules enforced before any sync writes**
+### Caller Workflow Pattern
 
-- reject malformed JSON and empty manifests
-- reject duplicate normalized source identities
-- reject duplicate normalized target paths
-- reject basename mismatches between `source_path` and `target_path`
-- reject unsupported directions
-- reject unsafe repository-relative paths
-- reject invalid marker combinations
-- enforce repository-wide basename uniqueness only when `uniqueness_policy` is `basename_unique`
+Caller repositories should keep the workflow generic and keep managed file mappings out of workflow YAML. The Visual Studio template caller workflow:
 
-**Authentication and assumptions**
+- runs on `workflow_dispatch`, `pull_request`, `push`, and schedule `17 3 * * *`
+- omits trigger branch filters and gates jobs dynamically against `github.event.repository.default_branch`
+- runs manual maintenance only when `workflow_dispatch` is executed on the default branch
+- fails non-default manual runs with `Manifest initialization must be run from the repository default branch.`
+- fails pull requests with a clear message if the manifest is missing
+- calls `command: init` when the manifest is missing on default-branch maintenance events
+- calls `command: sync` when the manifest exists
 
-- Use optional read-only `source_token` for private cross-repo source reads.
-- Otherwise use public access where possible.
-- Fail clearly when a private source repository cannot be read.
-- Source fetch helpers use GitHub repository contents and raw API behavior and are intended for managed text, config, and document-style files, not large binaries.
-- If this reusable workflow is hosted in a private repository and consumed by another private repository, GitHub Actions access settings must allow sharing and reuse accordingly.
+This broader-trigger plus dynamic-gating shape is intentional because GitHub Actions trigger branch lists cannot use a dynamic default-branch expression.
 
-**Migration from the legacy `.editorconfig` workflow**
+### Authentication And Assumptions
 
-1. Switch callers from `sync-editorconfig-on-push.yml` to `sync-files-from-manifest.yml`.
-2. Replace `canonical_raw_url` with `manifest_json`.
-3. Represent `.editorconfig`, `Directory.Build.props`, `AGENTS.md`, and other managed files as manifest entries instead of workflow-specific logic.
-4. Pass `source_token` only when private source repositories require authenticated reads.
+Use optional read-only `source_token` for private cross-repo source reads. Otherwise, public access is used where possible. If a private source repository cannot be read, the workflow fails clearly and asks for `source_token`.
 
----
+Source files are fetched through GitHub repository contents/raw API behavior. Stage 1 is intended for managed text, config, and document-style files such as `.editorconfig`, `Directory.Build.props`, `AGENTS.md`, and Copilot instruction files. It is not intended for large binary assets.
 
-### Deprecated `.editorconfig` Workflow (`sync-editorconfig-on-push.yml`)
+If this reusable workflow is hosted in a private repository and consumed by another private repository, GitHub Actions repository/reuse settings must allow that sharing relationship.
 
-This workflow remains available only as a temporary migration path for existing callers. New callers should use `sync-files-from-manifest.yml` instead.
+## Migration From The Legacy `.editorconfig` Workflow
 
----
+New callers should use `sync-files-from-manifest.yml`; the `.editorconfig`-specific workflow is kept only as a temporary migration path.
 
-## Versioning
+Migration steps:
 
-It is recommended to pin callers to a specific tag or commit SHA for stability:
-
-```yaml
-uses: BionicCode/workflows/.github/workflows/ci.yml@v1.0.0
-```
-
-Using a branch name such as `@main` always picks up the latest changes on that branch.
-
----
+1. Add the generic caller workflow to the caller or template repository.
+2. Run the caller workflow from the default branch to initialize `.github/sync-config`.
+3. Edit and commit `.github/sync-config/sync-manifest.json` with the real managed-file defaults.
+4. Remove the legacy `.editorconfig` redirect workflow from the caller/template repository.
+5. Pin the reusable workflow to a release tag or SHA after the first tested release.
 
 ## Contributing
 
-1. Add or update a workflow file under `.github/workflows/`.
-2. Keep reusable workflow interfaces typed and documented.
-3. Keep reusable workflow orchestration in YAML and implementation logic in dedicated helper files when the logic grows beyond a small inline step.
-4. Update this README to reflect any new or changed inputs, outputs, policies, or migration notes.
+1. Keep reusable workflow YAML orchestration-focused.
+2. Put substantial implementation logic under `.github/scripts/<workflow-name>/`.
+3. Keep workflow-call interfaces typed and documented.
+4. Update this README when inputs, command behavior, schemas, or migration requirements change.

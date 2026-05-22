@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {
+      "name": "unique_normalized_source_identity",
+      "enabled": true
+    },
+    {
+      "name": "unique_normalized_target_path",
+      "enabled": true
+    },
+    {
+      "name": "source_target_basename_must_match",
+      "enabled": true
+    },
+    {
+      "name": "repository_relative_safe_paths",
+      "enabled": true
+    },
+    {
+      "name": "file_like_paths_only",
+      "enabled": true
+    },
+    {
+      "name": "reject_reserved_target_path",
+      "enabled": true,
+      "prefixes": [
+        "_sync-files-from-manifest-workflow/"
+      ]
+    },
+    {
+      "name": "reject_stage1_non_source_to_target",
+      "enabled": true,
+      "when": {
+        "property": "direction",
+        "in": [
+          "target_to_source",
+          "two_way"
+        ]
+      },
+      "message": "Only direction=source_to_target is executable in Stage 1."
+    },
+    {
+      "name": "reject_stage1_marker_scoped_execution",
+      "enabled": true,
+      "when": {
+        "property": "managed_scope",
+        "in": [
+          "outside_markers",
+          "inside_markers"
+        ]
+      },
+      "message": "Marker-scoped manifest entries are schema-valid but not executable in Stage 1."
+    },
+    {
+      "name": "worktree_target_path_safety",
+      "enabled": true
+    },
+    {
+      "name": "basename_unique_tracked_file_scan",
+      "enabled": true,
+      "when": {
+        "property": "uniqueness_policy",
+        "equals": "basename_unique"
+      }
+    }
+  ]
+}

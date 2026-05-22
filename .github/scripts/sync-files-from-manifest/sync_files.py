@@ -5,10 +5,10 @@ import os
 from pathlib import Path
 
 from common import (
-    LifecyclePolicy,
-    ManagedScope,
+    ManifestEntry,
     ManifestError,
     SourceFetchError,
+    assert_safe_worktree_file_path,
     emit_output,
     fetch_source_bytes,
     load_normalized_manifest,
@@ -18,6 +18,12 @@ from common import (
     target_abspath,
     write_file_bytes,
 )
+
+
+LIFECYCLE_DISABLED = "disabled"
+LIFECYCLE_ENFORCE = "enforce"
+LIFECYCLE_SEED_ONCE = "seed_once"
+MANAGED_SCOPE_WHOLE_FILE = "whole_file"
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,10 +42,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def ensure_target_is_file(target_path: Path, target_label: str, entry_description: str) -> None:
-    if target_path.exists() and not target_path.is_file():
+def assert_stage1_executable(entry: ManifestEntry) -> None:
+    if entry.managed_scope != MANAGED_SCOPE_WHOLE_FILE:
         raise ManifestError(
-            f"{entry_description} points to target_path '{target_label}', but that path exists and is not a regular file."
+            f"{entry.describe()} is recognized by the manifest schema but not yet supported in execution for v1."
         )
 
 
@@ -48,19 +54,16 @@ def verify_entries(repo_root: Path, normalized_manifest_path: Path, source_token
 
     for entry in entries:
         log_info(f"Verifying {entry.describe()}.")
-        if entry.managed_scope is not ManagedScope.WHOLE_FILE:
-            raise ManifestError(
-                f"{entry.describe()} is recognized by the manifest schema but not yet supported in execution for v1."
-            )
+        assert_stage1_executable(entry)
 
         target_path = target_abspath(repo_root, entry.target_path)
-        ensure_target_is_file(target_path, entry.target_path, entry.describe())
+        assert_safe_worktree_file_path(repo_root, target_path, entry.target_path, entry.describe())
 
-        if entry.lifecycle_policy is LifecyclePolicy.DISABLED:
+        if entry.lifecycle_policy == LIFECYCLE_DISABLED:
             log_info(f"Skipping {entry.describe()} because lifecycle_policy is disabled.")
             continue
 
-        if entry.lifecycle_policy is LifecyclePolicy.SEED_ONCE:
+        if entry.lifecycle_policy == LIFECYCLE_SEED_ONCE:
             if not target_path.is_file():
                 raise ManifestError(
                     f"{entry.describe()} is missing required seed_once target '{entry.target_path}'."
@@ -68,22 +71,24 @@ def verify_entries(repo_root: Path, normalized_manifest_path: Path, source_token
             log_info(f"Verified seed_once target exists for {entry.describe()}.")
             continue
 
+        if entry.lifecycle_policy != LIFECYCLE_ENFORCE:
+            raise ManifestError(f"{entry.describe()} uses unsupported lifecycle policy '{entry.lifecycle_policy}'.")
+
         source_bytes = fetch_source_bytes(entry, source_token)
         if not target_path.is_file():
-            raise ManifestError(
-                f"{entry.describe()} is missing enforced target '{entry.target_path}'."
-            )
+            raise ManifestError(f"{entry.describe()} is missing enforced target '{entry.target_path}'.")
 
         target_bytes = read_file_bytes(target_path)
         if target_bytes != source_bytes:
             raise ManifestError(
-                f"{entry.describe()} is out of sync with its canonical source. Merge the sync PR created by this workflow."
+                f"{entry.describe()} is out of sync with its canonical source. "
+                "Merge the sync PR created by this workflow."
             )
 
         log_info(f"Verified target is in sync for {entry.describe()}.")
 
 
-def build_pr_body(changed_entries: list) -> str:
+def build_pr_body(changed_entries: list[ManifestEntry]) -> str:
     lines = [
         "Automated sync of manifest-managed files.",
         "",
@@ -104,26 +109,26 @@ def build_pr_body(changed_entries: list) -> str:
 
 def sync_entries(repo_root: Path, normalized_manifest_path: Path, source_token: str | None) -> None:
     entries = load_normalized_manifest(normalized_manifest_path)
-    changed_entries = []
+    changed_entries: list[ManifestEntry] = []
     changed_paths: list[str] = []
 
     for entry in entries:
         log_info(f"Synchronizing {entry.describe()}.")
-        if entry.managed_scope is not ManagedScope.WHOLE_FILE:
-            raise ManifestError(
-                f"{entry.describe()} is recognized by the manifest schema but not yet supported in execution for v1."
-            )
+        assert_stage1_executable(entry)
 
         target_path = target_abspath(repo_root, entry.target_path)
-        ensure_target_is_file(target_path, entry.target_path, entry.describe())
+        assert_safe_worktree_file_path(repo_root, target_path, entry.target_path, entry.describe())
 
-        if entry.lifecycle_policy is LifecyclePolicy.DISABLED:
+        if entry.lifecycle_policy == LIFECYCLE_DISABLED:
             log_info(f"Skipping {entry.describe()} because lifecycle_policy is disabled.")
             continue
 
-        if entry.lifecycle_policy is LifecyclePolicy.SEED_ONCE and target_path.is_file():
+        if entry.lifecycle_policy == LIFECYCLE_SEED_ONCE and target_path.is_file():
             log_info(f"Leaving existing seed_once target unchanged for {entry.describe()}.")
             continue
+
+        if entry.lifecycle_policy not in {LIFECYCLE_ENFORCE, LIFECYCLE_SEED_ONCE}:
+            raise ManifestError(f"{entry.describe()} uses unsupported lifecycle policy '{entry.lifecycle_policy}'.")
 
         source_bytes = fetch_source_bytes(entry, source_token)
         current_bytes = read_file_bytes(target_path) if target_path.is_file() else None

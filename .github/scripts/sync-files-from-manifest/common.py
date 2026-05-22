@@ -8,13 +8,17 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any
+from uuid import uuid4
+
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
 
 
 GITHUB_API_VERSION = "2022-11-28"
-RECOGNIZED_UNSUPPORTED_DIRECTIONS = {"target_to_source", "two_way"}
+SOURCE_FETCH_TIMEOUT_SECONDS = 30
+RESERVED_TARGET_PATH_PREFIXES = ("_sync-files-from-manifest-workflow/",)
 
 
 class ManifestError(Exception):
@@ -25,25 +29,19 @@ class SourceFetchError(Exception):
     """Raised when a source file cannot be fetched from GitHub."""
 
 
-class Direction(str, Enum):
-    SOURCE_TO_TARGET = "source_to_target"
+@dataclass(frozen=True)
+class ManifestMetadata:
+    entries_property: str
+    schema_version_property: str
+    fields: dict[str, str]
 
-
-class LifecyclePolicy(str, Enum):
-    ENFORCE = "enforce"
-    SEED_ONCE = "seed_once"
-    DISABLED = "disabled"
-
-
-class UniquenessPolicy(str, Enum):
-    BASENAME_UNIQUE = "basename_unique"
-    NONE = "none"
-
-
-class ManagedScope(str, Enum):
-    WHOLE_FILE = "whole_file"
-    OUTSIDE_MARKERS = "outside_markers"
-    INSIDE_MARKERS = "inside_markers"
+    def field(self, role: str) -> str:
+        try:
+            return self.fields[role]
+        except KeyError as exc:
+            raise ManifestError(
+                f"Schema metadata is missing required field role '{role}'."
+            ) from exc
 
 
 @dataclass(frozen=True)
@@ -59,11 +57,12 @@ class ManifestEntry:
     source_ref: str
     source_path: str
     target_path: str
-    direction: Direction
-    lifecycle_policy: LifecyclePolicy
-    uniqueness_policy: UniquenessPolicy
-    managed_scope: ManagedScope
+    direction: str
+    lifecycle_policy: str
+    uniqueness_policy: str
+    managed_scope: str
     markers: Markers | None = None
+    manifest_properties: dict[str, Any] | None = None
 
     @property
     def basename(self) -> str:
@@ -81,10 +80,14 @@ class ManifestEntry:
         return (
             f"manifest entry {self.index} "
             f"({self.source_repo}@{self.source_ref}:{self.source_path} -> {self.target_path}; "
-            f"lifecycle={self.lifecycle_policy.value}, "
-            f"uniqueness={self.uniqueness_policy.value}, "
-            f"scope={self.managed_scope.value})"
+            f"lifecycle={self.lifecycle_policy}, "
+            f"uniqueness={self.uniqueness_policy}, "
+            f"scope={self.managed_scope})"
         )
+
+    def manifest_value(self, property_name: str) -> Any:
+        properties = self.manifest_properties or {}
+        return properties.get(property_name)
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -93,10 +96,10 @@ class ManifestEntry:
             "source_ref": self.source_ref,
             "source_path": self.source_path,
             "target_path": self.target_path,
-            "direction": self.direction.value,
-            "lifecycle_policy": self.lifecycle_policy.value,
-            "uniqueness_policy": self.uniqueness_policy.value,
-            "managed_scope": self.managed_scope.value,
+            "direction": self.direction,
+            "lifecycle_policy": self.lifecycle_policy,
+            "uniqueness_policy": self.uniqueness_policy,
+            "managed_scope": self.managed_scope,
         }
         if self.markers is not None:
             data["markers"] = {"start": self.markers.start, "end": self.markers.end}
@@ -115,10 +118,10 @@ class ManifestEntry:
             source_ref=str(data["source_ref"]),
             source_path=str(data["source_path"]),
             target_path=str(data["target_path"]),
-            direction=Direction(str(data["direction"])),
-            lifecycle_policy=LifecyclePolicy(str(data["lifecycle_policy"])),
-            uniqueness_policy=UniquenessPolicy(str(data["uniqueness_policy"])),
-            managed_scope=ManagedScope(str(data["managed_scope"])),
+            direction=str(data["direction"]),
+            lifecycle_policy=str(data["lifecycle_policy"]),
+            uniqueness_policy=str(data["uniqueness_policy"]),
+            managed_scope=str(data["managed_scope"]),
             markers=marker_value,
         )
 
@@ -136,7 +139,7 @@ def emit_output(name: str, value: str) -> None:
     if not output_path:
         return
 
-    delimiter = "__SYNC_FILES_FROM_MANIFEST__"
+    delimiter = f"__SYNC_FILES_FROM_MANIFEST_{uuid4().hex}__"
     with open(output_path, "a", encoding="utf-8") as handle:
         if "\n" in value:
             handle.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
@@ -144,7 +147,120 @@ def emit_output(name: str, value: str) -> None:
             handle.write(f"{name}={value}\n")
 
 
-def require_string(value: Any, field_name: str, index: int) -> str:
+def script_root() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def default_schema_path() -> Path:
+    return script_root() / "schema" / "sync-manifest.schema.json"
+
+
+def default_rules_path() -> Path:
+    return script_root() / "schema" / "sync-rules.json"
+
+
+def default_template_path() -> Path:
+    return script_root() / "templates" / "sync-manifest.template.json"
+
+
+def load_json_file(path: Path) -> Any:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except json.JSONDecodeError as exc:
+        raise ManifestError(
+            f"JSON file '{path}' is invalid: {exc.msg} at line {exc.lineno}, column {exc.colno}."
+        ) from exc
+
+
+def load_schema(schema_path: Path) -> dict[str, Any]:
+    schema = load_json_file(schema_path)
+    if not isinstance(schema, dict):
+        raise ManifestError(f"Schema file '{schema_path}' must contain a JSON object.")
+
+    try:
+        Draft202012Validator.check_schema(schema)
+    except Exception as exc:
+        raise ManifestError(f"Schema file '{schema_path}' is not a valid Draft 2020-12 schema: {exc}.") from exc
+
+    return schema
+
+
+def load_rules(rules_path: Path) -> dict[str, Any]:
+    rules = load_json_file(rules_path)
+    if not isinstance(rules, dict) or not isinstance(rules.get("rules"), list):
+        raise ManifestError(f"Rules file '{rules_path}' must contain a JSON object with a rules array.")
+    return rules
+
+
+def load_manifest_metadata(schema: dict[str, Any]) -> ManifestMetadata:
+    metadata = schema.get("x-sync-files-from-manifest")
+    if not isinstance(metadata, dict):
+        raise ManifestError("Schema is missing x-sync-files-from-manifest metadata.")
+
+    manifest_shape = metadata.get("manifest_shape")
+    fields = metadata.get("entry_fields")
+    if not isinstance(manifest_shape, dict) or not isinstance(fields, dict):
+        raise ManifestError(
+            "Schema x-sync-files-from-manifest metadata must define manifest_shape and entry_fields."
+        )
+
+    entries_property = manifest_shape.get("entries_property")
+    schema_version_property = manifest_shape.get("schema_version_property")
+    if not isinstance(entries_property, str) or not entries_property:
+        raise ManifestError("Schema metadata must define manifest_shape.entries_property.")
+    if not isinstance(schema_version_property, str) or not schema_version_property:
+        raise ManifestError("Schema metadata must define manifest_shape.schema_version_property.")
+
+    normalized_fields: dict[str, str] = {}
+    for role, field_name in fields.items():
+        if not isinstance(role, str) or not isinstance(field_name, str) or not field_name:
+            raise ManifestError("Schema entry_fields metadata must map string roles to string property names.")
+        normalized_fields[role] = field_name
+
+    return ManifestMetadata(
+        entries_property=entries_property,
+        schema_version_property=schema_version_property,
+        fields=normalized_fields,
+    )
+
+
+def parse_manifest_document(manifest_json: str) -> Any:
+    try:
+        parsed = json.loads(manifest_json)
+    except json.JSONDecodeError as exc:
+        raise ManifestError(
+            f"Manifest JSON is invalid: {exc.msg} at line {exc.lineno}, column {exc.colno}."
+        ) from exc
+
+    if isinstance(parsed, list):
+        raise ManifestError(
+            "Manifest JSON uses the old top-level array shape. "
+            "Wrap the array under an 'entries' property and add 'schema_version': 1."
+        )
+
+    return parsed
+
+
+def format_schema_error(error: ValidationError) -> str:
+    location = "$"
+    if error.absolute_path:
+        location += "".join(
+            f"[{item}]" if isinstance(item, int) else f".{item}"
+            for item in error.absolute_path
+        )
+    return f"Manifest schema validation failed at {location}: {error.message}"
+
+
+def validate_manifest_schema(manifest_document: Any, schema: dict[str, Any]) -> None:
+    validator = Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(manifest_document), key=lambda item: list(item.absolute_path))
+    if errors:
+        raise ManifestError(format_schema_error(errors[0]))
+
+
+def require_string_property(raw_entry: dict[str, Any], field_name: str, index: int) -> str:
+    value = raw_entry.get(field_name)
     if not isinstance(value, str):
         raise ManifestError(f"Manifest entry {index}: '{field_name}' must be a string.")
 
@@ -155,210 +271,219 @@ def require_string(value: Any, field_name: str, index: int) -> str:
     return result
 
 
-def normalize_source_repo(value: Any, index: int) -> str:
-    repo = require_string(value, "source_repo", index)
-    parts = repo.split("/")
+def normalize_source_repo(value: str, index: int) -> str:
+    parts = value.split("/")
     if len(parts) != 2 or not parts[0] or not parts[1]:
         raise ManifestError(
-            f"Manifest entry {index}: 'source_repo' must use the 'owner/repository' format."
+            f"Manifest entry {index}: source repository must use the 'owner/repository' format."
         )
 
     if any(any(char.isspace() for char in part) for part in parts):
-        raise ManifestError(
-            f"Manifest entry {index}: 'source_repo' must not contain whitespace."
-        )
+        raise ManifestError(f"Manifest entry {index}: source repository must not contain whitespace.")
 
     return f"{parts[0].lower()}/{parts[1].lower()}"
 
 
-def normalize_source_ref(value: Any, index: int) -> str:
-    return require_string(value, "source_ref", index)
-
-
-def normalize_repo_relative_path(value: Any, field_name: str, index: int) -> str:
-    path_value = require_string(value, field_name, index)
-    if "\\" in path_value:
-        raise ManifestError(
-            f"Manifest entry {index}: '{field_name}' must use forward slashes."
-        )
-    if path_value.startswith("/"):
+def normalize_repo_relative_path(value: str, field_name: str, index: int) -> str:
+    if "\\" in value:
+        raise ManifestError(f"Manifest entry {index}: '{field_name}' must use forward slashes.")
+    if value.startswith("/"):
         raise ManifestError(
             f"Manifest entry {index}: '{field_name}' must be repository-relative, not absolute."
         )
-    if path_value.endswith("/"):
+    if value.endswith("/"):
         raise ManifestError(
             f"Manifest entry {index}: '{field_name}' must point to a file path, not a directory."
         )
 
-    segments = path_value.split("/")
+    segments = value.split("/")
     if any(segment == "" for segment in segments):
-        raise ManifestError(
-            f"Manifest entry {index}: '{field_name}' must not contain empty path segments."
-        )
+        raise ManifestError(f"Manifest entry {index}: '{field_name}' must not contain empty path segments.")
     if any(segment in {".", ".."} for segment in segments):
         raise ManifestError(
             f"Manifest entry {index}: '{field_name}' must not contain '.' or '..' path segments."
         )
 
-    normalized = PurePosixPath(path_value).as_posix()
+    normalized = PurePosixPath(value).as_posix()
     if normalized in {"", "."} or PurePosixPath(normalized).name in {"", ".", ".."}:
-        raise ManifestError(
-            f"Manifest entry {index}: '{field_name}' must point to a file path."
-        )
+        raise ManifestError(f"Manifest entry {index}: '{field_name}' must point to a file path.")
 
     return normalized
 
 
-def parse_direction(value: Any, index: int) -> Direction:
-    direction = require_string(value, "direction", index)
-    if direction in RECOGNIZED_UNSUPPORTED_DIRECTIONS:
-        raise ManifestError(
-            f"Manifest entry {index}: direction '{direction}' is intentionally unsupported in v1."
-        )
-
-    try:
-        return Direction(direction)
-    except ValueError as exc:
-        raise ManifestError(
-            f"Manifest entry {index}: unsupported direction '{direction}'."
-        ) from exc
-
-
-def parse_lifecycle_policy(value: Any, index: int) -> LifecyclePolicy:
-    lifecycle_policy = require_string(value, "lifecycle_policy", index)
-    try:
-        return LifecyclePolicy(lifecycle_policy)
-    except ValueError as exc:
-        raise ManifestError(
-            f"Manifest entry {index}: unsupported lifecycle_policy '{lifecycle_policy}'."
-        ) from exc
-
-
-def parse_uniqueness_policy(value: Any, index: int) -> UniquenessPolicy:
-    uniqueness_policy = require_string(value, "uniqueness_policy", index)
-    try:
-        return UniquenessPolicy(uniqueness_policy)
-    except ValueError as exc:
-        raise ManifestError(
-            f"Manifest entry {index}: unsupported uniqueness_policy '{uniqueness_policy}'."
-        ) from exc
-
-
-def parse_managed_scope(value: Any, index: int) -> ManagedScope:
-    managed_scope = require_string(value, "managed_scope", index)
-    try:
-        return ManagedScope(managed_scope)
-    except ValueError as exc:
-        raise ManifestError(
-            f"Manifest entry {index}: unsupported managed_scope '{managed_scope}'."
-        ) from exc
-
-
-def parse_markers(raw_entry: dict[str, Any], managed_scope: ManagedScope, index: int) -> Markers | None:
-    has_markers = "markers" in raw_entry
-    raw_markers = raw_entry.get("markers")
-
-    if managed_scope is ManagedScope.WHOLE_FILE:
-        if has_markers:
-            raise ManifestError(
-                f"Manifest entry {index}: markers must not be provided when managed_scope is 'whole_file'."
-            )
+def parse_markers(raw_entry: dict[str, Any], metadata: ManifestMetadata, index: int) -> Markers | None:
+    markers_field = metadata.field("markers")
+    marker_start_field = metadata.field("marker_start")
+    marker_end_field = metadata.field("marker_end")
+    raw_markers = raw_entry.get(markers_field)
+    if raw_markers is None:
         return None
+    if not isinstance(raw_markers, dict):
+        raise ManifestError(f"Manifest entry {index}: '{markers_field}' must be an object.")
 
-    if not has_markers or not isinstance(raw_markers, dict):
-        raise ManifestError(
-            f"Manifest entry {index}: markers.start and markers.end are required when managed_scope is '{managed_scope.value}'."
-        )
-
-    start = require_string(raw_markers.get("start"), "markers.start", index)
-    end = require_string(raw_markers.get("end"), "markers.end", index)
-
+    start = raw_markers.get(marker_start_field)
+    end = raw_markers.get(marker_end_field)
+    if not isinstance(start, str) or not start.strip():
+        raise ManifestError(f"Manifest entry {index}: '{markers_field}.{marker_start_field}' must not be empty.")
+    if not isinstance(end, str) or not end.strip():
+        raise ManifestError(f"Manifest entry {index}: '{markers_field}.{marker_end_field}' must not be empty.")
     if start == end:
         raise ManifestError(
-            f"Manifest entry {index}: markers.start and markers.end must not be identical."
+            f"Manifest entry {index}: marker start and marker end must not be identical."
         )
 
     return Markers(start=start, end=end)
 
 
-def parse_manifest_json(manifest_json: str) -> list[Any]:
-    try:
-        parsed = json.loads(manifest_json)
-    except json.JSONDecodeError as exc:
-        raise ManifestError(f"Manifest JSON is invalid: {exc.msg} at line {exc.lineno}, column {exc.colno}.") from exc
+def build_entries(manifest_document: dict[str, Any], metadata: ManifestMetadata) -> list[ManifestEntry]:
+    raw_entries = manifest_document.get(metadata.entries_property)
+    if not isinstance(raw_entries, list):
+        raise ManifestError(f"Manifest must contain an array property '{metadata.entries_property}'.")
 
-    if not isinstance(parsed, list) or not parsed:
-        raise ManifestError("Manifest JSON must be a non-empty array of manifest entries.")
-
-    return parsed
-
-
-def normalize_manifest(manifest_json: str, repo_root: Path) -> list[ManifestEntry]:
-    raw_entries = parse_manifest_json(manifest_json)
     entries: list[ManifestEntry] = []
-
-    source_identities: dict[tuple[str, str, str], int] = {}
-    target_paths: dict[str, int] = {}
-
+    fields = metadata.fields
     for raw_index, raw_entry in enumerate(raw_entries, start=1):
         if not isinstance(raw_entry, dict):
-            raise ManifestError(f"Manifest entry {raw_index}: each manifest entry must be a JSON object.")
+            raise ManifestError(f"Manifest entry {raw_index}: each entry must be a JSON object.")
 
-        source_repo = normalize_source_repo(raw_entry.get("source_repo"), raw_index)
-        source_ref = normalize_source_ref(raw_entry.get("source_ref"), raw_index)
-        source_path = normalize_repo_relative_path(raw_entry.get("source_path"), "source_path", raw_index)
-        target_path = normalize_repo_relative_path(raw_entry.get("target_path"), "target_path", raw_index)
-        direction = parse_direction(raw_entry.get("direction"), raw_index)
-        lifecycle_policy = parse_lifecycle_policy(raw_entry.get("lifecycle_policy"), raw_index)
-        uniqueness_policy = parse_uniqueness_policy(raw_entry.get("uniqueness_policy"), raw_index)
-        managed_scope = parse_managed_scope(raw_entry.get("managed_scope"), raw_index)
-        markers = parse_markers(raw_entry, managed_scope, raw_index)
-
-        if PurePosixPath(source_path).name != PurePosixPath(target_path).name:
-            raise ManifestError(
-                f"Manifest entry {raw_index}: basename mismatch between source_path '{source_path}' and target_path '{target_path}'."
-            )
-
-        entry = ManifestEntry(
-            index=raw_index,
-            source_repo=source_repo,
-            source_ref=source_ref,
-            source_path=source_path,
-            target_path=target_path,
-            direction=direction,
-            lifecycle_policy=lifecycle_policy,
-            uniqueness_policy=uniqueness_policy,
-            managed_scope=managed_scope,
-            markers=markers,
+        source_repo = normalize_source_repo(
+            require_string_property(raw_entry, fields["source_repo"], raw_index),
+            raw_index,
+        )
+        source_ref = require_string_property(raw_entry, fields["source_ref"], raw_index)
+        source_path = normalize_repo_relative_path(
+            require_string_property(raw_entry, fields["source_path"], raw_index),
+            fields["source_path"],
+            raw_index,
+        )
+        target_path = normalize_repo_relative_path(
+            require_string_property(raw_entry, fields["target_path"], raw_index),
+            fields["target_path"],
+            raw_index,
         )
 
-        existing_source = source_identities.get(entry.source_identity_key)
-        if existing_source is not None:
-            raise ManifestError(
-                f"{entry.describe()} duplicates source identity already declared by manifest entry {existing_source}."
+        manifest_properties = dict(raw_entry)
+        manifest_properties[fields["source_repo"]] = source_repo
+        manifest_properties[fields["source_path"]] = source_path
+        manifest_properties[fields["target_path"]] = target_path
+
+        entries.append(
+            ManifestEntry(
+                index=raw_index,
+                source_repo=source_repo,
+                source_ref=source_ref,
+                source_path=source_path,
+                target_path=target_path,
+                direction=require_string_property(raw_entry, fields["direction"], raw_index),
+                lifecycle_policy=require_string_property(raw_entry, fields["lifecycle_policy"], raw_index),
+                uniqueness_policy=require_string_property(raw_entry, fields["uniqueness_policy"], raw_index),
+                managed_scope=require_string_property(raw_entry, fields["managed_scope"], raw_index),
+                markers=parse_markers(raw_entry, metadata, raw_index),
+                manifest_properties=manifest_properties,
             )
-        source_identities[entry.source_identity_key] = entry.index
+        )
 
-        existing_target = target_paths.get(entry.target_identity_key)
-        if existing_target is not None:
-            raise ManifestError(
-                f"{entry.describe()} duplicates target_path already declared by manifest entry {existing_target}."
-            )
-        target_paths[entry.target_identity_key] = entry.index
-
-        entries.append(entry)
-
-    validate_stage1_policy_support(entries)
-    validate_uniqueness_policies(entries, repo_root)
     return entries
 
 
-def validate_stage1_policy_support(entries: list[ManifestEntry]) -> None:
+def rule_applies_to_entry(rule: dict[str, Any], entry: ManifestEntry) -> bool:
+    condition = rule.get("when")
+    if condition is None:
+        return True
+    if not isinstance(condition, dict):
+        raise ManifestError(f"Semantic rule '{rule.get('name')}' has an invalid when condition.")
+
+    property_name = condition.get("property")
+    if not isinstance(property_name, str) or not property_name:
+        raise ManifestError(f"Semantic rule '{rule.get('name')}' when condition must define a property.")
+
+    value = entry.manifest_value(property_name)
+    if "equals" in condition:
+        return value == condition["equals"]
+    if "in" in condition:
+        allowed_values = condition["in"]
+        if not isinstance(allowed_values, list):
+            raise ManifestError(f"Semantic rule '{rule.get('name')}' when.in condition must be an array.")
+        return value in allowed_values
+    if "starts_with" in condition:
+        prefix = condition["starts_with"]
+        return isinstance(value, str) and isinstance(prefix, str) and value.startswith(prefix)
+
+    raise ManifestError(
+        f"Semantic rule '{rule.get('name')}' when condition must define equals, in, or starts_with."
+    )
+
+
+def enabled_rules(rules_config: dict[str, Any]) -> list[dict[str, Any]]:
+    rules: list[dict[str, Any]] = []
+    for raw_rule in rules_config.get("rules", []):
+        if not isinstance(raw_rule, dict):
+            raise ManifestError("Every semantic rule entry must be an object.")
+        if raw_rule.get("enabled", False):
+            name = raw_rule.get("name")
+            if not isinstance(name, str) or not name:
+                raise ManifestError("Every enabled semantic rule must have a non-empty name.")
+            rules.append(raw_rule)
+    return rules
+
+
+def run_unique_normalized_source_identity(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
+    seen: dict[tuple[str, str, str], int] = {}
     for entry in entries:
-        if entry.managed_scope is not ManagedScope.WHOLE_FILE:
+        existing_index = seen.get(entry.source_identity_key)
+        if existing_index is not None:
             raise ManifestError(
-                f"{entry.describe()} is recognized by the manifest schema but not yet supported in execution for v1."
+                f"{entry.describe()} duplicates source identity already declared by manifest entry {existing_index}."
             )
+        seen[entry.source_identity_key] = entry.index
+
+
+def run_unique_normalized_target_path(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
+    seen: dict[str, int] = {}
+    for entry in entries:
+        existing_index = seen.get(entry.target_identity_key)
+        if existing_index is not None:
+            raise ManifestError(
+                f"{entry.describe()} duplicates target_path already declared by manifest entry {existing_index}."
+            )
+        seen[entry.target_identity_key] = entry.index
+
+
+def run_source_target_basename_must_match(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
+    for entry in entries:
+        if PurePosixPath(entry.source_path).name != PurePosixPath(entry.target_path).name:
+            raise ManifestError(
+                f"{entry.describe()} has a basename mismatch between source_path '{entry.source_path}' "
+                f"and target_path '{entry.target_path}'."
+            )
+
+
+def run_repository_relative_safe_paths(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
+    for entry in entries:
+        normalize_repo_relative_path(entry.source_path, "source_path", entry.index)
+        normalize_repo_relative_path(entry.target_path, "target_path", entry.index)
+
+
+def run_file_like_paths_only(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
+    for entry in entries:
+        for field_name, path_value in (("source_path", entry.source_path), ("target_path", entry.target_path)):
+            if path_value.endswith("/") or PurePosixPath(path_value).name == "":
+                raise ManifestError(
+                    f"{entry.describe()} uses {field_name} '{path_value}', but it must point to a file-like path."
+                )
+
+
+def run_reject_reserved_target_path(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
+    prefixes = rule.get("prefixes", RESERVED_TARGET_PATH_PREFIXES)
+    if not isinstance(prefixes, list):
+        prefixes = list(RESERVED_TARGET_PATH_PREFIXES)
+
+    for entry in entries:
+        for prefix in prefixes:
+            if isinstance(prefix, str) and entry.target_path.startswith(prefix):
+                raise ManifestError(
+                    f"{entry.describe()} targets reserved implementation scratch space '{prefix}'."
+                )
 
 
 def load_tracked_files(repo_root: Path) -> list[str]:
@@ -370,22 +495,21 @@ def load_tracked_files(repo_root: Path) -> list[str]:
             capture_output=True,
         )
     except (OSError, subprocess.CalledProcessError) as exc:
-        raise ManifestError(
-            f"Failed to inspect tracked files in '{repo_root}': {exc}."
-        ) from exc
+        raise ManifestError(f"Failed to inspect tracked files in '{repo_root}': {exc}.") from exc
 
     output = result.stdout.decode("utf-8", errors="strict")
     return [item for item in output.split("\0") if item]
 
 
-def validate_uniqueness_policies(entries: list[ManifestEntry], repo_root: Path) -> None:
+def run_basename_unique_tracked_file_scan(entries: list[ManifestEntry], rule: dict[str, Any], repo_root: Path) -> None:
+    matching_entries = [entry for entry in entries if rule_applies_to_entry(rule, entry)]
+    if not matching_entries:
+        return
+
     tracked_files = load_tracked_files(repo_root)
     target_paths = {entry.target_path: entry for entry in entries}
 
-    for entry in entries:
-        if entry.uniqueness_policy is not UniquenessPolicy.BASENAME_UNIQUE:
-            continue
-
+    for entry in matching_entries:
         conflicting_manifest_targets = sorted(
             other.target_path
             for other in entries
@@ -394,7 +518,8 @@ def validate_uniqueness_policies(entries: list[ManifestEntry], repo_root: Path) 
         if conflicting_manifest_targets:
             conflicts = ", ".join(conflicting_manifest_targets)
             raise ManifestError(
-                f"{entry.describe()} declares uniqueness_policy 'basename_unique', but other manifest targets share basename '{entry.basename}': {conflicts}."
+                f"{entry.describe()} declares basename uniqueness, but other manifest targets "
+                f"share basename '{entry.basename}': {conflicts}."
             )
 
         conflicting_tracked_paths = sorted(
@@ -407,14 +532,119 @@ def validate_uniqueness_policies(entries: list[ManifestEntry], repo_root: Path) 
         if conflicting_tracked_paths:
             conflicts = ", ".join(conflicting_tracked_paths)
             raise ManifestError(
-                f"{entry.describe()} declares uniqueness_policy 'basename_unique', but tracked repository files already share basename '{entry.basename}': {conflicts}."
+                f"{entry.describe()} declares basename uniqueness, but tracked repository files "
+                f"already share basename '{entry.basename}': {conflicts}."
             )
+
+
+def target_abspath(repo_root: Path, target_path: str) -> Path:
+    return repo_root.joinpath(*PurePosixPath(target_path).parts)
+
+
+def assert_safe_worktree_file_path(
+    repo_root: Path,
+    target_path: Path,
+    target_label: str,
+    entry_description: str,
+) -> None:
+    resolved_root = repo_root.resolve(strict=True)
+    lexical_parent = repo_root
+    target_parts = PurePosixPath(target_label).parts
+
+    for path_part in target_parts[:-1]:
+        lexical_parent = lexical_parent / path_part
+
+        if lexical_parent.is_symlink():
+            raise ManifestError(
+                f"{entry_description} cannot use target_path '{target_label}' because parent '{lexical_parent}' is a symlink."
+            )
+        if lexical_parent.exists() and not lexical_parent.is_dir():
+            raise ManifestError(
+                f"{entry_description} cannot use target_path '{target_label}' because parent '{lexical_parent}' is not a directory."
+            )
+
+    if target_path.is_symlink():
+        raise ManifestError(
+            f"{entry_description} cannot use target_path '{target_label}' because it is a symlink."
+        )
+
+    try:
+        target_path.resolve(strict=False).relative_to(resolved_root)
+    except ValueError as exc:
+        raise ManifestError(
+            f"{entry_description} points outside the checked-out repository: '{target_label}'."
+        ) from exc
+
+    if target_path.exists() and not target_path.is_file():
+        raise ManifestError(
+            f"{entry_description} points to target_path '{target_label}', but that path exists and is not a regular file."
+        )
+
+
+def run_worktree_target_path_safety(entries: list[ManifestEntry], rule: dict[str, Any], repo_root: Path) -> None:
+    for entry in entries:
+        target_path = target_abspath(repo_root, entry.target_path)
+        assert_safe_worktree_file_path(repo_root, target_path, entry.target_path, entry.describe())
+
+
+def run_reject_matching_entries(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
+    message = rule.get("message")
+    if not isinstance(message, str) or not message:
+        message = f"Semantic rule '{rule.get('name')}' rejected this manifest entry."
+
+    for entry in entries:
+        if rule_applies_to_entry(rule, entry):
+            raise ManifestError(f"{entry.describe()}: {message}")
+
+
+def validate_semantic_rules(entries: list[ManifestEntry], rules_config: dict[str, Any], repo_root: Path) -> None:
+    dispatch = {
+        "unique_normalized_source_identity": lambda rule: run_unique_normalized_source_identity(entries, rule),
+        "unique_normalized_target_path": lambda rule: run_unique_normalized_target_path(entries, rule),
+        "source_target_basename_must_match": lambda rule: run_source_target_basename_must_match(entries, rule),
+        "repository_relative_safe_paths": lambda rule: run_repository_relative_safe_paths(entries, rule),
+        "file_like_paths_only": lambda rule: run_file_like_paths_only(entries, rule),
+        "reject_reserved_target_path": lambda rule: run_reject_reserved_target_path(entries, rule),
+        "worktree_target_path_safety": lambda rule: run_worktree_target_path_safety(entries, rule, repo_root),
+        "basename_unique_tracked_file_scan": lambda rule: run_basename_unique_tracked_file_scan(entries, rule, repo_root),
+        "reject_matching_entries": lambda rule: run_reject_matching_entries(entries, rule),
+        "reject_stage1_non_source_to_target": lambda rule: run_reject_matching_entries(entries, rule),
+        "reject_stage1_marker_scoped_execution": lambda rule: run_reject_matching_entries(entries, rule),
+    }
+
+    for rule in enabled_rules(rules_config):
+        name = rule["name"]
+        runner = dispatch.get(name)
+        if runner is None:
+            raise ManifestError(f"Semantic rule '{name}' is enabled but no executor is implemented.")
+        runner(rule)
+
+
+def validate_and_normalize_manifest(
+    manifest_json: str,
+    repo_root: Path,
+    schema_path: Path,
+    rules_path: Path,
+) -> list[ManifestEntry]:
+    schema = load_schema(schema_path)
+    rules = load_rules(rules_path)
+    metadata = load_manifest_metadata(schema)
+    manifest_document = parse_manifest_document(manifest_json)
+
+    validate_manifest_schema(manifest_document, schema)
+    entries = build_entries(manifest_document, metadata)
+    validate_semantic_rules(entries, rules, repo_root)
+    return entries
 
 
 def write_normalized_manifest(entries: list[ManifestEntry], destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": 1,
+        "entries": [entry.to_dict() for entry in entries],
+    }
     with destination.open("w", encoding="utf-8", newline="\n") as handle:
-        json.dump([entry.to_dict() for entry in entries], handle, indent=2)
+        json.dump(payload, handle, indent=2)
         handle.write("\n")
 
 
@@ -422,14 +652,10 @@ def load_normalized_manifest(path: Path) -> list[ManifestEntry]:
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
 
-    if not isinstance(data, list):
-        raise ManifestError(f"Normalized manifest file '{path}' must contain a JSON array.")
+    if not isinstance(data, dict) or not isinstance(data.get("entries"), list):
+        raise ManifestError(f"Normalized manifest file '{path}' must contain an object with an entries array.")
 
-    return [ManifestEntry.from_dict(item) for item in data]
-
-
-def target_abspath(repo_root: Path, target_path: str) -> Path:
-    return repo_root.joinpath(*PurePosixPath(target_path).parts)
+    return [ManifestEntry.from_dict(item) for item in data["entries"]]
 
 
 def ensure_parent_directory(target_path: Path) -> None:
@@ -437,12 +663,12 @@ def ensure_parent_directory(target_path: Path) -> None:
 
 
 def fetch_source_bytes(entry: ManifestEntry, source_token: str | None) -> bytes:
-    encoded_path = urllib.parse.quote(entry.source_path, safe="")
+    encoded_path = urllib.parse.quote(entry.source_path, safe="/")
     encoded_ref = urllib.parse.quote(entry.source_ref, safe="")
     url = f"https://api.github.com/repos/{entry.source_repo}/contents/{encoded_path}?ref={encoded_ref}"
 
     headers = {
-        "Accept": "application/vnd.github.raw",
+        "Accept": "application/vnd.github.raw+json",
         "User-Agent": "sync-files-from-manifest",
         "X-GitHub-Api-Version": GITHUB_API_VERSION,
     }
@@ -452,7 +678,7 @@ def fetch_source_bytes(entry: ManifestEntry, source_token: str | None) -> bytes:
     request = urllib.request.Request(url, headers=headers, method="GET")
 
     try:
-        with urllib.request.urlopen(request) as response:
+        with urllib.request.urlopen(request, timeout=SOURCE_FETCH_TIMEOUT_SECONDS) as response:
             return response.read()
     except urllib.error.HTTPError as exc:
         message = (
@@ -462,9 +688,7 @@ def fetch_source_bytes(entry: ManifestEntry, source_token: str | None) -> bytes:
         )
         raise SourceFetchError(message) from exc
     except urllib.error.URLError as exc:
-        raise SourceFetchError(
-            f"Unable to fetch source for {entry.describe()}: {exc.reason}."
-        ) from exc
+        raise SourceFetchError(f"Unable to fetch source for {entry.describe()}: {exc.reason}.") from exc
 
 
 def read_file_bytes(path: Path) -> bytes:
@@ -474,4 +698,3 @@ def read_file_bytes(path: Path) -> bytes:
 def write_file_bytes(path: Path, content: bytes) -> None:
     ensure_parent_directory(path)
     path.write_bytes(content)
-
