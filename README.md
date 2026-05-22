@@ -54,7 +54,9 @@ jobs:
     with:
       command: sync
       manifest_json: ${{ needs.inspect-manifest.outputs.manifest_json }}
-    secrets: inherit
+    # Omit this block when all source repositories are public.
+    secrets:
+      source_token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
 ```
 
 Inputs:
