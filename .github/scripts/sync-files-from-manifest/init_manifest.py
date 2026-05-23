@@ -5,6 +5,7 @@ from pathlib import Path
 
 from common import (
     ManifestError,
+    default_documentation_path,
     default_schema_path,
     default_template_path,
     emit_output,
@@ -16,6 +17,7 @@ from common import (
 CALLER_CONFIG_DIR = Path(".github/sync-config")
 CALLER_SCHEMA_NAME = "sync-manifest.schema.json"
 CALLER_MANIFEST_NAME = "sync-manifest.json"
+CALLER_DOCUMENTATION_DIR = "documentation"
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +37,11 @@ def parse_args() -> argparse.Namespace:
         default=str(default_template_path()),
         help="Starter manifest template bundled with the reusable workflow.",
     )
+    parser.add_argument(
+        "--documentation-source",
+        default=str(default_documentation_path()),
+        help="Documentation directory bundled with the reusable workflow.",
+    )
     return parser.parse_args()
 
 
@@ -52,6 +59,20 @@ def write_if_changed(destination: Path, content: bytes) -> bool:
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(content)
     return True
+
+
+def copy_documentation_tree(source_dir: Path, destination_dir: Path) -> list[str]:
+    if not source_dir.is_dir():
+        raise ManifestError(f"Documentation source directory '{source_dir}' does not exist.")
+
+    changed_paths: list[str] = []
+    for source_file in sorted(path for path in source_dir.rglob("*") if path.is_file()):
+        relative_path = source_file.relative_to(source_dir)
+        destination_file = destination_dir / relative_path
+        if write_if_changed(destination_file, read_bytes(source_file)):
+            changed_paths.append((CALLER_CONFIG_DIR / CALLER_DOCUMENTATION_DIR / relative_path).as_posix())
+
+    return changed_paths
 
 
 def build_pr_body(changed_paths: list[str], manifest_created: bool) -> str:
@@ -87,10 +108,12 @@ def main() -> int:
     repo_root = Path(args.repo_root).resolve()
     schema_source = Path(args.schema_source).resolve()
     template_source = Path(args.template_source).resolve()
+    documentation_source = Path(args.documentation_source).resolve()
 
     config_dir = repo_root / CALLER_CONFIG_DIR
     schema_destination = config_dir / CALLER_SCHEMA_NAME
     manifest_destination = config_dir / CALLER_MANIFEST_NAME
+    documentation_destination = config_dir / CALLER_DOCUMENTATION_DIR
 
     changed_paths: list[str] = []
     schema_content = read_bytes(schema_source)
@@ -110,6 +133,13 @@ def main() -> int:
             changed_paths.append((CALLER_CONFIG_DIR / CALLER_MANIFEST_NAME).as_posix())
             manifest_created = True
             log_info(f"Created starter caller manifest at '{manifest_destination}'.")
+
+    documentation_changed_paths = copy_documentation_tree(documentation_source, documentation_destination)
+    if documentation_changed_paths:
+        changed_paths.extend(documentation_changed_paths)
+        log_info(f"Created or updated caller documentation at '{documentation_destination}'.")
+    else:
+        log_info(f"Caller documentation is already current at '{documentation_destination}'.")
 
     emit_output("changed", "true" if changed_paths else "false")
     emit_output("changed_count", str(len(changed_paths)))

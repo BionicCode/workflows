@@ -163,6 +163,10 @@ def default_template_path() -> Path:
     return script_root() / "templates" / "sync-manifest.template.json"
 
 
+def default_documentation_path() -> Path:
+    return script_root() / "documentation"
+
+
 def load_json_file(path: Path) -> Any:
     try:
         with path.open("r", encoding="utf-8") as handle:
