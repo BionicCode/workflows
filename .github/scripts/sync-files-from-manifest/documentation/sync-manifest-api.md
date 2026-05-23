@@ -12,19 +12,19 @@ The authoritative schema and runtime rules are bundled with the reusable workflo
 
 ## Types
 
-| Type | Description |
-|---|---|
-| [`ManifestDocument`](types/manifest-document.md) | Top-level JSON object that identifies the schema version and contains manifest entries. |
-| [`ManifestEntry`](types/manifest-entry.md) | One strict source-to-target managed-file mapping plus its policy values. |
-| [`Markers`](types/markers.md) | Marker delimiters used by future marker-aware managed scopes. |
-| [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Repository-relative file path string used for source and target paths. |
-| [`Direction`](types/direction.md) | Declares the synchronization direction for an entry. |
-| [`LifecyclePolicy`](types/lifecycle-policy.md) | Declares whether an entry is enforced, seeded once, or disabled. |
-| [`UniquenessPolicy`](types/uniqueness-policy.md) | Declares repository-wide basename uniqueness behavior. |
-| [`ManagedScope`](types/managed-scope.md) | Declares whether the workflow manages the whole file or a marker-scoped section. |
+| Type | Placement | Description |
+|---|---|---|
+| [`ManifestDocument`](types/manifest-document.md) | Top-level object | Root JSON object that identifies the schema version and contains manifest entries. |
+| [`ManifestEntry`](types/manifest-entry.md) | Array item object | One strict source-to-target managed-file mapping plus its policy values. |
+| [`Markers`](types/markers.md) | Nested object | Marker delimiters stored under `ManifestEntry.markers`. |
+| [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Scalar string | Repository-relative file path string used by `source_path` and `target_path`. |
+| [`Direction`](types/direction.md) | Enum string | Synchronization direction value used by `ManifestEntry.direction`. |
+| [`LifecyclePolicy`](types/lifecycle-policy.md) | Enum string | Lifecycle value used by `ManifestEntry.lifecycle_policy`. |
+| [`UniquenessPolicy`](types/uniqueness-policy.md) | Enum string | Uniqueness value used by `ManifestEntry.uniqueness_policy`. |
+| [`ManagedScope`](types/managed-scope.md) | Enum string | Managed-scope value used by `ManifestEntry.managed_scope`. |
 
 ## Guides
 
 | Document | Description |
 |---|---|
-| [`sync-manifest.md`](sync-manifest.md) | Purpose, usage, supported Stage 1 behavior, non-goals, and field-by-field manifest documentation. |
+| [`sync-manifest.md`](sync-manifest.md) | Purpose, usage, current version boundaries, type placement, and field-by-field manifest documentation. |

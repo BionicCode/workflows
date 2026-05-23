@@ -17,6 +17,33 @@ One strict source-to-target managed-file mapping.
 }
 ```
 
+Marker-scoped entries include the conditional `markers` child object:
+
+```json
+{
+  "source_repo": "BionicCode/template-visual-studio-repository",
+  "source_ref": "main",
+  "source_path": "AGENTS.md",
+  "target_path": "AGENTS.md",
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "outside_markers",
+  "markers": {
+    "start": "<!-- BEGIN REPOSITORY SPECIFICS -->",
+    "end": "<!-- END REPOSITORY SPECIFICS -->"
+  }
+}
+```
+
+## Placement
+
+| Property | Value |
+|---|---|
+| Placement | Array item object |
+| Valid parent | [`ManifestDocument`](manifest-document.md) |
+| Parent property | `entries[]` |
+
 ## Attributes
 
 | Attribute | Required | Type | Description |
@@ -30,6 +57,12 @@ One strict source-to-target managed-file mapping.
 | `uniqueness_policy` | Yes | [`UniquenessPolicy`](uniqueness-policy.md) | Optional basename uniqueness policy. |
 | `managed_scope` | Yes | [`ManagedScope`](managed-scope.md) | Portion of the target file managed by the workflow. |
 | `markers` | Conditional | [`Markers`](markers.md) | Required for marker scopes and forbidden for `whole_file`. |
+
+## Child Values
+
+| Child Property | Child Type | Description |
+|---|---|---|
+| `markers` | [`Markers`](markers.md) | Conditional marker delimiter object for marker-scoped entries. |
 
 ## Validation Rules
 

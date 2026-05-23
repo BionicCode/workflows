@@ -2,9 +2,17 @@
 
 Declares whether repository-wide basename uniqueness is enforced for an entry.
 
+## Placement
+
+| Property | Value |
+|---|---|
+| Placement | Enum string |
+| Valid parent | [`ManifestEntry`](manifest-entry.md) |
+| Parent property | `uniqueness_policy` |
+
 ## Values
 
-| Value | Stage 1 executable | Description |
+| Value | Supported | Description |
 |---|---:|---|
 | `basename_unique` | Yes | Fail validation when any tracked repository file outside the declared target path shares the target basename. |
 | `none` | Yes | Do not scan the repository for same-basename files. |

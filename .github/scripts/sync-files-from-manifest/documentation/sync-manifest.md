@@ -19,64 +19,97 @@ The reusable workflow reads the manifest, validates it against the schema bundle
 - Lets pull request runs verify that managed targets are present and in sync.
 - Lets default-branch maintenance runs create or update one aggregated sync PR.
 
-## What The Manifest Does Not Do In Stage 1
+## Current Version Boundaries
 
-- It does not support target-to-source writes.
-- It does not support two-way synchronization.
-- It does not support rename aliases where source and target basenames differ.
-- It does not delete extra tracked files.
-- It does not preserve marker-scoped sections yet.
-- It does not use timestamps or newer-wins conflict resolution.
-- It is not intended for large binary assets.
+- Target-to-source writes are accepted by the manifest schema but rejected by current execution rules before source fetch or write.
+- Two-way synchronization is accepted by the manifest schema but rejected by current execution rules before source fetch or write.
+- Rename aliases where source and target basenames differ are rejected.
+- Extra tracked files are not deleted.
+- Marker-scoped entries are accepted by the manifest schema but rejected by current execution rules before source fetch or write.
+- Timestamp or newer-wins conflict resolution is not part of the current workflow behavior.
+- Large binary assets are outside the intended use case.
 
-## Top-Level Shape
+## Complete Shape
 
-The manifest is a JSON object:
+This example shows the complete manifest structure, including the conditional `markers` child object. A real entry uses either `managed_scope: "whole_file"` without `markers`, or a marker-scoped value with `markers`.
 
 ```json
 {
   "$schema": "./sync-manifest.schema.json",
   "schema_version": 1,
-  "entries": []
+  "entries": [
+    {
+      "source_repo": "BionicCode/template-visual-studio-repository",
+      "source_ref": "main",
+      "source_path": "AGENTS.md",
+      "target_path": "AGENTS.md",
+      "direction": "source_to_target",
+      "lifecycle_policy": "enforce",
+      "uniqueness_policy": "none",
+      "managed_scope": "outside_markers",
+      "markers": {
+        "start": "<!-- BEGIN REPOSITORY SPECIFICS -->",
+        "end": "<!-- END REPOSITORY SPECIFICS -->"
+      }
+    }
+  ]
 }
 ```
 
-| Field | Required | Type | Description |
-|---|---:|---|---|
-| `$schema` | No | string | Relative schema reference for editor tooling. Authoritative validation uses the schema bundled with the reusable workflow. |
-| `schema_version` | Yes | number | Manifest schema version. Stage 1 supports `1`. |
-| `entries` | Yes | [`ManifestEntry[]`](types/manifest-entry.md) | Non-empty list of managed-file mappings. |
+## Type Placement
+
+| Type | Placement | Valid Parent | Parent Property | Description |
+|---|---|---|---|---|
+| [`ManifestDocument`](types/manifest-document.md) | Top-level object | None | None | Root JSON object for `sync-manifest.json`. |
+| [`ManifestEntry`](types/manifest-entry.md) | Array item object | `ManifestDocument` | `entries[]` | One strict managed-file mapping. |
+| [`Markers`](types/markers.md) | Nested object | `ManifestEntry` | `markers` | Marker delimiter object for marker-scoped entries. |
+| [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Scalar string | `ManifestEntry` | `source_path`, `target_path` | Repository-relative file path. |
+| [`Direction`](types/direction.md) | Enum string | `ManifestEntry` | `direction` | Synchronization direction. |
+| [`LifecyclePolicy`](types/lifecycle-policy.md) | Enum string | `ManifestEntry` | `lifecycle_policy` | Missing, changed, and existing target behavior. |
+| [`UniquenessPolicy`](types/uniqueness-policy.md) | Enum string | `ManifestEntry` | `uniqueness_policy` | Basename uniqueness policy. |
+| [`ManagedScope`](types/managed-scope.md) | Enum string | `ManifestEntry` | `managed_scope` | Portion of the target file managed by the workflow. |
+
+## ManifestDocument Fields
+
+| Field | Required | Type | Child Level | Description |
+|---|---:|---|---|---|
+| `$schema` | No | string | Top-level scalar | Relative schema reference for editor tooling. Authoritative validation uses the schema bundled with the reusable workflow. |
+| `schema_version` | Yes | number | Top-level scalar | Manifest schema version. The current version supports `1`. |
+| `entries` | Yes | [`ManifestEntry[]`](types/manifest-entry.md) | Child array | Non-empty list of managed-file mappings. |
 
 Old top-level array manifests are rejected. Wrap the array under `entries` and add `schema_version`.
 
-## Entry Fields
+## ManifestEntry Fields
 
-Each entry is a strict one-to-one mapping:
+Each entry is a strict one-to-one mapping and is valid only as an item of `ManifestDocument.entries`.
 
-```json
-{
-  "source_repo": "BionicCode/template-visual-studio-repository",
-  "source_ref": "main",
-  "source_path": "README.md",
-  "target_path": "README.md",
-  "direction": "source_to_target",
-  "lifecycle_policy": "seed_once",
-  "uniqueness_policy": "none",
-  "managed_scope": "whole_file"
-}
-```
+| Field | Required | Type | Child Level | Description |
+|---|---:|---|---|---|
+| `source_repo` | Yes | string | Entry scalar | Source repository in `owner/repository` form. |
+| `source_ref` | Yes | string | Entry scalar | Source branch, tag, or commit SHA. |
+| `source_path` | Yes | [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Entry scalar | Source file path inside `source_repo`. |
+| `target_path` | Yes | [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Entry scalar | Target file path inside the caller repository. Parent directories are created as needed. |
+| `direction` | Yes | [`Direction`](types/direction.md) | Entry scalar | Synchronization direction. The current version executes only `source_to_target`. |
+| `lifecycle_policy` | Yes | [`LifecyclePolicy`](types/lifecycle-policy.md) | Entry scalar | Runtime behavior for missing, existing, and changed targets. |
+| `uniqueness_policy` | Yes | [`UniquenessPolicy`](types/uniqueness-policy.md) | Entry scalar | Optional repository-wide basename uniqueness enforcement. |
+| `managed_scope` | Yes | [`ManagedScope`](types/managed-scope.md) | Entry scalar | Portion of the target file managed by the workflow. The current version executes `whole_file`. |
+| `markers` | Conditional | [`Markers`](types/markers.md) | Nested child object | Required for marker-scoped entries and forbidden for `whole_file`. |
 
-| Field | Required | Type | Description |
-|---|---:|---|---|
-| `source_repo` | Yes | string | Source repository in `owner/repository` form. |
-| `source_ref` | Yes | string | Source branch, tag, or commit SHA. |
-| `source_path` | Yes | [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Source file path inside `source_repo`. |
-| `target_path` | Yes | [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Target file path inside the caller repository. Parent directories are created as needed. |
-| `direction` | Yes | [`Direction`](types/direction.md) | Synchronization direction. Stage 1 executes only `source_to_target`. |
-| `lifecycle_policy` | Yes | [`LifecyclePolicy`](types/lifecycle-policy.md) | Runtime behavior for missing, existing, and changed targets. |
-| `uniqueness_policy` | Yes | [`UniquenessPolicy`](types/uniqueness-policy.md) | Optional repository-wide basename uniqueness enforcement. |
-| `managed_scope` | Yes | [`ManagedScope`](types/managed-scope.md) | Portion of the target file managed by the workflow. Stage 1 executes only `whole_file`. |
-| `markers` | Conditional | [`Markers`](types/markers.md) | Required for marker-scoped entries and forbidden for `whole_file`. Marker scopes are schema-recognized but Stage 1 runtime-deferred. |
+## Markers Fields
+
+`Markers` is valid only as the `ManifestEntry.markers` child object.
+
+| Field | Required | Type | Child Level | Description |
+|---|---:|---|---|---|
+| `start` | Yes | string | Markers scalar | Non-empty marker start delimiter. |
+| `end` | Yes | string | Markers scalar | Non-empty marker end delimiter. |
+
+Current marker validation criteria:
+
+- `markers` is required for `managed_scope: "outside_markers"` and `managed_scope: "inside_markers"`.
+- `markers` is forbidden for `managed_scope: "whole_file"`.
+- `markers.start` and `markers.end` are required non-empty strings.
+- `markers.start` and `markers.end` must not be identical.
 
 ## Mapping Rules
 

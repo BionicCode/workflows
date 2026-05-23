@@ -11,6 +11,14 @@ Marker delimiter object used by marker-scoped managed scopes.
 }
 ```
 
+## Placement
+
+| Property | Value |
+|---|---|
+| Placement | Nested object |
+| Valid parent | [`ManifestEntry`](manifest-entry.md) |
+| Parent property | `markers` |
+
 ## Attributes
 
 | Attribute | Required | Type | Description |
@@ -23,4 +31,4 @@ Marker delimiter object used by marker-scoped managed scopes.
 - `start` and `end` must not be identical.
 - `markers` is required when `managed_scope` is `outside_markers` or `inside_markers`.
 - `markers` is forbidden when `managed_scope` is `whole_file`.
-- Stage 1 validates marker shape but rejects marker-scoped execution before source fetch or file write.
+- Marker-scoped entries are accepted by the manifest schema and rejected by current execution rules before source fetch or file write.

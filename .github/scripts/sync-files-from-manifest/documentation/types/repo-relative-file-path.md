@@ -2,6 +2,14 @@
 
 Repository-relative file path string.
 
+## Placement
+
+| Property | Value |
+|---|---|
+| Placement | Scalar string |
+| Valid parent | [`ManifestEntry`](manifest-entry.md) |
+| Parent properties | `source_path`, `target_path` |
+
 ## Examples
 
 Allowed:
