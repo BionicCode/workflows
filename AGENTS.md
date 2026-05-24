@@ -1,4 +1,4 @@
-# AGENTS.md (Version 3)
+# AGENTS.md (Version 3.1)
 
 <!--
 Shared baseline instructions for repositories using coding agents.
@@ -120,6 +120,28 @@ When reporting completion, include a short self-review summary:
 
 Do not claim completion if the implementation only passes tests but has not been reviewed against the task goal and external contract.
 
+## Documentation Is Part of Done
+
+For implementation tasks, documentation must be treated as part of the deliverable when the change affects any public or user-visible behavior.
+
+Update relevant documentation in the same change when any of these change:
+- public API, CLI, workflow, manifest, schema, configuration, or file format contract;
+- supported or unsupported feature status;
+- validation rules, error behavior, diagnostics, caveats, limits, or failure modes;
+- setup, usage, examples, recipes, migration guidance, or generated/copyable templates;
+- security, permission, token, path-safety, or deployment assumptions.
+
+Do not postpone documentation as a separate cleanup task unless the user explicitly scopes the task as code-only.
+
+Before finalizing, verify that:
+- public docs match implemented behavior;
+- examples use the current supported contract;
+- feature matrices and roadmaps are updated when feature status changed;
+- copied or generated documentation is refreshed when the repository owns those copies;
+- no stale docs describe removed, deferred, or unsupported behavior as current.
+
+If documentation was not updated, explicitly state why it was not needed.
+
 ## Testing Standards
 - Add or update tests for bug fixes, behavior changes, and public API changes when feasible.
 - Prefer focused unit tests for logic and invariants; use integration or end-to-end tests when behavior crosses boundaries that unit tests cannot validate.
@@ -220,6 +242,7 @@ When you changed code, report:
 - whether documentation was updated and at what level,
 - the self-review result and the main invariants checked,
 - and any remaining warnings, errors, assumptions, risks, or blockers.
+- whether documentation was updated, which files changed, and why documentation was or was not required;
 
 If execution was blocked, report the exact blocker instead of pretending verification happened.
 
