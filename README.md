@@ -18,7 +18,7 @@ Reference reusable workflows with:
 uses: BionicCode/workflows/.github/workflows/<workflow-file>.yml@<ref>
 ```
 
-Using `@main` is acceptable during development and early testing. After release, descendant repositories should pin reusable workflows to a tag or full commit SHA for stability and supply-chain safety.
+Using `@main` is acceptable during development and early testing. After release, descendant repositories should pin reusable workflows to a tag or, preferably, a full commit SHA for immutable production use and supply-chain safety.
 
 ## Managed-File Sync Ownership
 
@@ -118,14 +118,50 @@ Each entry supports:
 - `managed_scope`
 - `markers` only when required by marker-scoped managed scopes
 
-Stage 1 executes:
+The current version executes:
 
 - `direction: source_to_target`
 - `lifecycle_policy: enforce`, `seed_once`, `disabled`
 - `uniqueness_policy: basename_unique`, `none`
-- `managed_scope: whole_file`
+- `managed_scope: whole_file`, `outside_markers`, `inside_markers`
 
-The schema recognizes `managed_scope: outside_markers` and `managed_scope: inside_markers`, but Stage 1 rejects those entries before source fetch/write with a clear unsupported-in-v1 error.
+Managed scopes:
+
+| Scope | Runtime support | Intended content |
+|---|---:|---|
+| `whole_file` | Yes | Byte-for-byte source-to-target sync. Suitable for text files and binary files that can be fetched through the GitHub source API. |
+| `outside_markers` | Yes | Source owns content outside source-defined marker blocks. Target owns content inside those blocks. Marker-scoped sync is strict UTF-8 text-file behavior. |
+| `inside_markers` | Yes | Source owns content inside marker blocks. Target owns outside content. Marker-scoped sync is strict UTF-8 text-file behavior. |
+
+Marker delimiters are exact substring matches. They are not regular expressions and are not trimmed, case-folded, or whitespace-normalized.
+
+### Feature Support Matrix
+
+| Feature | Schema-valid | Runtime-supported | Notes |
+|---|---:|---:|---|
+| `source_to_target` + `whole_file` | Yes | Yes | Byte-for-byte target replacement or verification. |
+| `source_to_target` + `outside_markers` | Yes | Yes | Source outside content is enforced; target-owned blocks may be preserved or fully omitted by projection. |
+| `source_to_target` + `inside_markers` | Yes | Yes | Source inner content is enforced by occurrence order. |
+| `target_to_source` | Yes | No | Recognized for future contract stability; rejected by current execution rules. |
+| `two_way` | Yes | No | Recognized for future contract stability; rejected by current execution rules. |
+| Directory or glob sync | No | No | Add explicit one-to-one manifest entries instead. |
+| Delete unmatched targets | No | No | Extra files are not deleted automatically. |
+
+### Marker-Scoped Behavior
+
+For marker-scoped entries, source files and existing target files are decoded with strict UTF-8. Undecodable files fail clearly. Use `whole_file` for binary files or for files where byte-for-byte replacement is desired.
+
+`outside_markers`:
+
+- Source-side marker blocks define target-owned extension points.
+- If the target has the same number of exact marker blocks as the source, target inner content is preserved by occurrence order.
+- If the target has zero exact marker blocks, the target must equal the source-owned outside projection; partial or extra target marker blocks fail.
+
+`inside_markers`:
+
+- The target must contain the same exact marker count as the source, matched by occurrence order.
+- Source inner content is enforced into occurrence-matched target blocks.
+- The workflow does not use fuzzy diff, LCS, `difflib`, or heuristic moved-block detection. Same-source-context movement detection requires future marker IDs, named anchors, or source-owned outside context anchors.
 
 ### Validation Model
 
@@ -149,7 +185,7 @@ Python semantic validation handles checks that require normalization, Git state,
 - reserved `_sync-files-from-manifest-workflow/` target paths
 - symlink targets and symlink parent directories
 - tracked-file scanning for `basename_unique`
-- Stage 1 rejection of schema-recognized but runtime-deferred policies
+- rejection of schema-recognized but currently unsupported execution policies such as `target_to_source` and `two_way`
 
 After validation, execution reads only the normalized manifest file produced by validation. `sync_files.py` does not reinterpret raw `manifest_json`.
 
@@ -167,11 +203,127 @@ Caller repositories should keep the workflow generic and keep managed file mappi
 
 This broader-trigger plus dynamic-gating shape is intentional because GitHub Actions trigger branch lists cannot use a dynamic default-branch expression.
 
+### Common Recipes
+
+Sync `.editorconfig` as a singleton whole file:
+
+```json
+{
+  "source_repo": "BionicCode/bioniccode-code-style",
+  "source_ref": "main",
+  "source_path": ".editorconfig",
+  "target_path": ".editorconfig",
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "basename_unique",
+  "managed_scope": "whole_file"
+}
+```
+
+Sync `Directory.Build.props` as a whole file:
+
+```json
+{
+  "source_repo": "BionicCode/bioniccode-code-style",
+  "source_ref": "main",
+  "source_path": "Directory.Build.props",
+  "target_path": "Directory.Build.props",
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "whole_file"
+}
+```
+
+Sync `AGENTS.md` or Copilot instructions while preserving repository-specific text:
+
+```json
+{
+  "source_repo": "BionicCode/template-visual-studio-repository",
+  "source_ref": "main",
+  "source_path": "AGENTS.md",
+  "target_path": "AGENTS.md",
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "outside_markers",
+  "markers": {
+    "start": "<!-- BEGIN REPOSITORY SPECIFICS -->",
+    "end": "<!-- END REPOSITORY SPECIFICS -->"
+  }
+}
+```
+
+The corresponding source file can include this placeholder:
+
+```markdown
+<!-- BEGIN REPOSITORY SPECIFICS -->
+<!-- Repository owners may edit only this section. -->
+<!-- END REPOSITORY SPECIFICS -->
+```
+
+Do not append annotations to a marker delimiter unless the manifest marker string includes that annotation exactly. If no target-owned section is desired, use `managed_scope: "whole_file"` instead of marker scope.
+
+Seed a starter file once:
+
+```json
+{
+  "source_repo": "BionicCode/template-visual-studio-repository",
+  "source_ref": "main",
+  "source_path": "README.md",
+  "target_path": "README.md",
+  "direction": "source_to_target",
+  "lifecycle_policy": "seed_once",
+  "uniqueness_policy": "none",
+  "managed_scope": "whole_file"
+}
+```
+
+### Failure Mode Examples
+
+- Old top-level array manifest: wrap the array under `entries` and add `schema_version`.
+- Duplicate `target_path`: each normalized target path may appear once.
+- Basename mismatch: `source_path` and `target_path` basenames must match.
+- Private source without `source_token`: provide an explicit read-only source token secret.
+- Marker exact-match failure: marker delimiters must match the manifest strings exactly.
+- `outside_markers` partial marker mismatch: keep all source-defined marker blocks or omit all target-owned blocks.
+- Marker-scoped binary or invalid UTF-8 content: use `whole_file` or convert the file to strict UTF-8 text.
+
+### Security Model
+
+- The caller repository `GITHUB_TOKEN` writes only to the caller repository.
+- `source_token` is optional and should be read-only; use it only when private source repositories require it.
+- Avoid implicit secret inheritance; pass only the named `source_token` secret when needed.
+- Pin reusable workflows for production, preferably to a full commit SHA.
+
+### Limits And Roadmap
+
+Current:
+
+- `source_to_target`
+- `whole_file`
+- `outside_markers`
+- `inside_markers`
+
+Planned:
+
+- directory or glob sync
+
+Possible later:
+
+- delete policy for unmatched targets
+- marker IDs, named anchors, or source-owned outside context anchors
+
+Deferred:
+
+- `target_to_source`
+- `two_way`
+
 ### Authentication And Assumptions
 
 Use optional read-only `source_token` for private cross-repo source reads. Otherwise, public access is used where possible. If a private source repository cannot be read, the workflow fails clearly and asks for `source_token`.
 
-Source files are fetched through GitHub repository contents/raw API behavior. Stage 1 is intended for managed text, config, and document-style files such as `.editorconfig`, `Directory.Build.props`, `AGENTS.md`, and Copilot instruction files. It is not intended for large binary assets.
+Source files are fetched through GitHub repository contents/raw API behavior. Marker-scoped sync is intended for managed UTF-8 text, config, and document-style files such as `.editorconfig`, `Directory.Build.props`, `AGENTS.md`, and Copilot instruction files. `whole_file` sync remains byte-for-byte behavior and can handle binary files when GitHub source-fetch behavior supports them. Large files are constrained by GitHub repository contents/raw API behavior.
 
 If this reusable workflow is hosted in a private repository and consumed by another private repository, GitHub Actions repository/reuse settings must allow that sharing relationship.
 
@@ -185,7 +337,7 @@ Migration steps:
 2. Run the caller workflow from the default branch to initialize `.github/sync-config`.
 3. Edit and commit `.github/sync-config/sync-manifest.json` with the real managed-file defaults.
 4. Remove the legacy `.editorconfig` redirect workflow from the caller/template repository.
-5. Pin the reusable workflow to a release tag or SHA after the first tested release.
+5. Pin the reusable workflow to a release tag or, preferably, a full commit SHA after the first tested release.
 
 ## Contributing
 
