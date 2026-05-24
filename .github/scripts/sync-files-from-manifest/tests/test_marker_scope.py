@@ -23,6 +23,7 @@ from common import (  # noqa: E402
     fetch_source_bytes,
     load_manifest_metadata,
     load_normalized_manifest,
+    manifest_entry_path,
     load_schema,
     normalize_repo_relative_path,
     parse_markers,
@@ -762,6 +763,15 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             self.assertIn("First differing byte offset:", message)
             self.assertNotIn("target line", message)
 
+
+    def test_manifest_entry_path_converts_human_entry_numbers_to_zero_based_jsonpath(self) -> None:
+        self.assertEqual("$.entries[0]", manifest_entry_path(1))
+        self.assertEqual("$.entries[1].target_path", manifest_entry_path(2, "target_path"))
+
+    def test_manifest_entry_path_rejects_non_positive_entry_numbers(self) -> None:
+        with self.assertRaises(ValueError):
+            manifest_entry_path(0)
+
     def test_malformed_normalized_manifest_reports_line_column(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "normalized.json"
@@ -792,8 +802,8 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
                 )
 
             message = str(context.exception)
-            self.assertIn("$.entries[2].target_path", message)
             self.assertIn("$.entries[1].target_path", message)
+            self.assertIn("$.entries[0].target_path", message)
 
     def test_basename_mismatch_semantic_error_includes_jsonpaths(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -812,14 +822,14 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
                 )
 
             message = str(context.exception)
-            self.assertIn("$.entries[1].source_path", message)
-            self.assertIn("$.entries[1].target_path", message)
+            self.assertIn("$.entries[0].source_path", message)
+            self.assertIn("$.entries[0].target_path", message)
 
     def test_unsafe_path_semantic_error_includes_jsonpath(self) -> None:
         with self.assertRaises(ManifestError) as context:
             normalize_repo_relative_path("../bad.md", "target_path", 1)
 
-        self.assertIn("$.entries[1].target_path", str(context.exception))
+        self.assertIn("$.entries[0].target_path", str(context.exception))
 
     def test_marker_semantic_error_includes_jsonpath(self) -> None:
         metadata = load_manifest_metadata(load_schema(default_schema_path()))
@@ -827,7 +837,7 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
         with self.assertRaises(ManifestError) as context:
             parse_markers({"markers": {"start": START, "end": START}}, metadata, 1)
 
-        self.assertIn("$.entries[1].markers", str(context.exception))
+        self.assertIn("$.entries[0].markers", str(context.exception))
 
     def test_reserved_target_path_semantic_error_includes_jsonpath(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -848,7 +858,7 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
                     default_rules_path(),
                 )
 
-            self.assertIn("$.entries[1].target_path", str(context.exception))
+            self.assertIn("$.entries[0].target_path", str(context.exception))
 
     def test_source_fetch_failure_includes_source_field_jsonpath_hints(self) -> None:
         entry = make_entry("whole_file")
@@ -865,9 +875,9 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             common.urllib.request.urlopen = original_urlopen
 
         message = str(context.exception)
-        self.assertIn("$.entries[1].source_repo", message)
-        self.assertIn("$.entries[1].source_ref", message)
-        self.assertIn("$.entries[1].source_path", message)
+        self.assertIn("$.entries[0].source_repo", message)
+        self.assertIn("$.entries[0].source_ref", message)
+        self.assertIn("$.entries[0].source_path", message)
 
     def test_atomic_write_mkdir_failure_is_wrapped_in_manifest_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

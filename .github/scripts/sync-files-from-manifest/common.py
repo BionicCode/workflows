@@ -29,8 +29,17 @@ class SourceFetchError(Exception):
     """Raised when a source file cannot be fetched from GitHub."""
 
 
-def manifest_entry_path(index: int, field: str | None = None) -> str:
-    path = f"$.entries[{index}]"
+def manifest_entry_path(entry_number: int, field: str | None = None) -> str:
+    """Return a JSONPath-style location for a one-based manifest entry number.
+
+    Human-facing manifest entry numbers are one-based (``Manifest entry 1``).
+    JSONPath array indexes are zero-based, so entry number N maps to
+    ``$.entries[N - 1]``.
+    """
+    if entry_number < 1:
+        raise ValueError("Manifest entry numbers are 1-based.")
+
+    path = f"$.entries[{entry_number - 1}]"
     if field:
         path += "".join(f".{part}" for part in field.split("."))
     return path
