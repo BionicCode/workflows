@@ -22,6 +22,7 @@ from common import (
 from marker_scope import (
     compose_marker_scoped_bytes,
     is_marker_scope,
+    text_location,
     validate_source_marker_blocks,
 )
 
@@ -64,6 +65,40 @@ def assert_supported_scope(entry: ManifestEntry) -> None:
         raise ManifestError(f"{entry.describe()} uses unsupported managed_scope '{entry.managed_scope}'.")
 
 
+def first_differing_byte_offset(left: bytes, right: bytes) -> int | None:
+    shared_length = min(len(left), len(right))
+    for offset in range(shared_length):
+        if left[offset] != right[offset]:
+            return offset
+    if len(left) != len(right):
+        return shared_length
+    return None
+
+
+def marker_scoped_byte_location(target_bytes: bytes, byte_offset: int) -> str | None:
+    try:
+        prefix = target_bytes[:byte_offset].decode(encoding="utf-8", errors="strict")
+        text = target_bytes.decode(encoding="utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return None
+
+    location = text_location(text, len(prefix))
+    return f"target line {location.line}, column {location.column}"
+
+
+def drift_diagnostic(entry: ManifestEntry, target_bytes: bytes, expected_bytes: bytes) -> str:
+    byte_offset = first_differing_byte_offset(target_bytes, expected_bytes)
+    if byte_offset is None:
+        return ""
+
+    details = f" First differing byte offset: {byte_offset}."
+    if is_marker_scope(entry):
+        text_location_details = marker_scoped_byte_location(target_bytes, byte_offset)
+        if text_location_details is not None:
+            details += f" First differing target text location: {text_location_details}."
+    return details
+
+
 def verify_enforced_entry(
     entry: ManifestEntry,
     target_path: Path,
@@ -84,6 +119,7 @@ def verify_enforced_entry(
         raise ManifestError(
             f"{entry.describe()} is out of sync with its canonical source. "
             "Merge the sync PR created by this workflow."
+            f"{drift_diagnostic(entry, target_bytes, expected_bytes)}"
         )
 
     log_info(f"Verified target is in sync for {entry.describe()}.")
@@ -181,10 +217,10 @@ def plan_sync_entry(repo_root: Path, entry: ManifestEntry, source_token: str | N
 
 
 def write_file_bytes_atomically(path: Path, content: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
     temp_path: Path | None = None
 
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             mode="wb",
             delete=False,

@@ -29,6 +29,13 @@ class SourceFetchError(Exception):
     """Raised when a source file cannot be fetched from GitHub."""
 
 
+def manifest_entry_path(index: int, field: str | None = None) -> str:
+    path = f"$.entries[{index}]"
+    if field:
+        path += "".join(f".{part}" for part in field.split("."))
+    return path
+
+
 @dataclass(frozen=True)
 class ManifestMetadata:
     entries_property: str
@@ -266,51 +273,71 @@ def validate_manifest_schema(manifest_document: Any, schema: dict[str, Any]) -> 
 def require_string_property(raw_entry: dict[str, Any], field_name: str, index: int) -> str:
     value = raw_entry.get(field_name)
     if not isinstance(value, str):
-        raise ManifestError(f"Manifest entry {index}: '{field_name}' must be a string.")
+        raise ManifestError(
+            f"Manifest entry {index}: '{field_name}' must be a string at {manifest_entry_path(index, field_name)}."
+        )
 
     result = value.strip()
     if not result:
-        raise ManifestError(f"Manifest entry {index}: '{field_name}' must not be empty.")
+        raise ManifestError(
+            f"Manifest entry {index}: '{field_name}' must not be empty at {manifest_entry_path(index, field_name)}."
+        )
 
     return result
 
 
-def normalize_source_repo(value: str, index: int) -> str:
+def normalize_source_repo(value: str, index: int, field_name: str = "source_repo") -> str:
     parts = value.split("/")
     if len(parts) != 2 or not parts[0] or not parts[1]:
         raise ManifestError(
-            f"Manifest entry {index}: source repository must use the 'owner/repository' format."
+            f"Manifest entry {index}: source repository must use the 'owner/repository' format "
+            f"at {manifest_entry_path(index, field_name)}."
         )
 
     if any(any(char.isspace() for char in part) for part in parts):
-        raise ManifestError(f"Manifest entry {index}: source repository must not contain whitespace.")
+        raise ManifestError(
+            f"Manifest entry {index}: source repository must not contain whitespace "
+            f"at {manifest_entry_path(index, field_name)}."
+        )
 
     return f"{parts[0].lower()}/{parts[1].lower()}"
 
 
 def normalize_repo_relative_path(value: str, field_name: str, index: int) -> str:
     if "\\" in value:
-        raise ManifestError(f"Manifest entry {index}: '{field_name}' must use forward slashes.")
+        raise ManifestError(
+            f"Manifest entry {index}: '{field_name}' must use forward slashes "
+            f"at {manifest_entry_path(index, field_name)}."
+        )
     if value.startswith("/"):
         raise ManifestError(
-            f"Manifest entry {index}: '{field_name}' must be repository-relative, not absolute."
+            f"Manifest entry {index}: '{field_name}' must be repository-relative, not absolute "
+            f"at {manifest_entry_path(index, field_name)}."
         )
     if value.endswith("/"):
         raise ManifestError(
-            f"Manifest entry {index}: '{field_name}' must point to a file path, not a directory."
+            f"Manifest entry {index}: '{field_name}' must point to a file path, not a directory "
+            f"at {manifest_entry_path(index, field_name)}."
         )
 
     segments = value.split("/")
     if any(segment == "" for segment in segments):
-        raise ManifestError(f"Manifest entry {index}: '{field_name}' must not contain empty path segments.")
+        raise ManifestError(
+            f"Manifest entry {index}: '{field_name}' must not contain empty path segments "
+            f"at {manifest_entry_path(index, field_name)}."
+        )
     if any(segment in {".", ".."} for segment in segments):
         raise ManifestError(
-            f"Manifest entry {index}: '{field_name}' must not contain '.' or '..' path segments."
+            f"Manifest entry {index}: '{field_name}' must not contain '.' or '..' path segments "
+            f"at {manifest_entry_path(index, field_name)}."
         )
 
     normalized = PurePosixPath(value).as_posix()
     if normalized in {"", "."} or PurePosixPath(normalized).name in {"", ".", ".."}:
-        raise ManifestError(f"Manifest entry {index}: '{field_name}' must point to a file path.")
+        raise ManifestError(
+            f"Manifest entry {index}: '{field_name}' must point to a file path "
+            f"at {manifest_entry_path(index, field_name)}."
+        )
 
     return normalized
 
@@ -323,17 +350,27 @@ def parse_markers(raw_entry: dict[str, Any], metadata: ManifestMetadata, index: 
     if raw_markers is None:
         return None
     if not isinstance(raw_markers, dict):
-        raise ManifestError(f"Manifest entry {index}: '{markers_field}' must be an object.")
+        raise ManifestError(
+            f"Manifest entry {index}: '{markers_field}' must be an object "
+            f"at {manifest_entry_path(index, markers_field)}."
+        )
 
     start = raw_markers.get(marker_start_field)
     end = raw_markers.get(marker_end_field)
     if not isinstance(start, str) or not start.strip():
-        raise ManifestError(f"Manifest entry {index}: '{markers_field}.{marker_start_field}' must not be empty.")
+        raise ManifestError(
+            f"Manifest entry {index}: '{markers_field}.{marker_start_field}' must not be empty "
+            f"at {manifest_entry_path(index, f'{markers_field}.{marker_start_field}')}."
+        )
     if not isinstance(end, str) or not end.strip():
-        raise ManifestError(f"Manifest entry {index}: '{markers_field}.{marker_end_field}' must not be empty.")
+        raise ManifestError(
+            f"Manifest entry {index}: '{markers_field}.{marker_end_field}' must not be empty "
+            f"at {manifest_entry_path(index, f'{markers_field}.{marker_end_field}')}."
+        )
     if start == end:
         raise ManifestError(
-            f"Manifest entry {index}: marker start and marker end must not be identical."
+            f"Manifest entry {index}: marker start and marker end must not be identical "
+            f"at {manifest_entry_path(index, markers_field)}."
         )
 
     return Markers(start=start, end=end)
@@ -348,11 +385,14 @@ def build_entries(manifest_document: dict[str, Any], metadata: ManifestMetadata)
     fields = metadata.fields
     for raw_index, raw_entry in enumerate(raw_entries, start=1):
         if not isinstance(raw_entry, dict):
-            raise ManifestError(f"Manifest entry {raw_index}: each entry must be a JSON object.")
+            raise ManifestError(
+                f"Manifest entry {raw_index}: each entry must be a JSON object at {manifest_entry_path(raw_index)}."
+            )
 
         source_repo = normalize_source_repo(
             require_string_property(raw_entry, fields["source_repo"], raw_index),
             raw_index,
+            fields["source_repo"],
         )
         source_ref = require_string_property(raw_entry, fields["source_ref"], raw_index)
         source_path = normalize_repo_relative_path(
@@ -437,7 +477,9 @@ def run_unique_normalized_source_identity(entries: list[ManifestEntry], rule: di
         existing_index = seen.get(entry.source_identity_key)
         if existing_index is not None:
             raise ManifestError(
-                f"{entry.describe()} duplicates source identity already declared by manifest entry {existing_index}."
+                f"{entry.describe()} duplicates source identity already declared by manifest entry {existing_index}. "
+                f"Current entry at {manifest_entry_path(entry.index)}; existing entry at "
+                f"{manifest_entry_path(existing_index)}."
             )
         seen[entry.source_identity_key] = entry.index
 
@@ -448,7 +490,9 @@ def run_unique_normalized_target_path(entries: list[ManifestEntry], rule: dict[s
         existing_index = seen.get(entry.target_identity_key)
         if existing_index is not None:
             raise ManifestError(
-                f"{entry.describe()} duplicates target_path already declared by manifest entry {existing_index}."
+                f"{entry.describe()} duplicates target_path already declared by manifest entry {existing_index}. "
+                f"Current target at {manifest_entry_path(entry.index, 'target_path')}; existing target at "
+                f"{manifest_entry_path(existing_index, 'target_path')}."
             )
         seen[entry.target_identity_key] = entry.index
 
@@ -458,7 +502,8 @@ def run_source_target_basename_must_match(entries: list[ManifestEntry], rule: di
         if PurePosixPath(entry.source_path).name != PurePosixPath(entry.target_path).name:
             raise ManifestError(
                 f"{entry.describe()} has a basename mismatch between source_path '{entry.source_path}' "
-                f"and target_path '{entry.target_path}'."
+                f"and target_path '{entry.target_path}' at {manifest_entry_path(entry.index, 'source_path')} "
+                f"and {manifest_entry_path(entry.index, 'target_path')}."
             )
 
 
@@ -473,7 +518,8 @@ def run_file_like_paths_only(entries: list[ManifestEntry], rule: dict[str, Any])
         for field_name, path_value in (("source_path", entry.source_path), ("target_path", entry.target_path)):
             if path_value.endswith("/") or PurePosixPath(path_value).name == "":
                 raise ManifestError(
-                    f"{entry.describe()} uses {field_name} '{path_value}', but it must point to a file-like path."
+                    f"{entry.describe()} uses {field_name} '{path_value}', but it must point to a file-like path "
+                    f"at {manifest_entry_path(entry.index, field_name)}."
                 )
 
 
@@ -486,7 +532,8 @@ def run_reject_reserved_target_path(entries: list[ManifestEntry], rule: dict[str
         for prefix in prefixes:
             if isinstance(prefix, str) and entry.target_path.startswith(prefix):
                 raise ManifestError(
-                    f"{entry.describe()} targets reserved implementation scratch space '{prefix}'."
+                    f"{entry.describe()} targets reserved implementation scratch space '{prefix}' "
+                    f"at {manifest_entry_path(entry.index, 'target_path')}."
                 )
 
 
@@ -523,7 +570,8 @@ def run_basename_unique_tracked_file_scan(entries: list[ManifestEntry], rule: di
             conflicts = ", ".join(conflicting_manifest_targets)
             raise ManifestError(
                 f"{entry.describe()} declares basename uniqueness, but other manifest targets "
-                f"share basename '{entry.basename}': {conflicts}."
+                f"share basename '{entry.basename}': {conflicts}. Entry at "
+                f"{manifest_entry_path(entry.index, 'target_path')}."
             )
 
         conflicting_tracked_paths = sorted(
@@ -537,7 +585,8 @@ def run_basename_unique_tracked_file_scan(entries: list[ManifestEntry], rule: di
             conflicts = ", ".join(conflicting_tracked_paths)
             raise ManifestError(
                 f"{entry.describe()} declares basename uniqueness, but tracked repository files "
-                f"already share basename '{entry.basename}': {conflicts}."
+                f"already share basename '{entry.basename}': {conflicts}. Entry at "
+                f"{manifest_entry_path(entry.index, 'target_path')}."
             )
 
 
@@ -598,7 +647,9 @@ def run_reject_matching_entries(entries: list[ManifestEntry], rule: dict[str, An
 
     for entry in entries:
         if rule_applies_to_entry(rule, entry):
-            raise ManifestError(f"{entry.describe()}: {message}")
+            property_name = (rule.get("when") or {}).get("property") if isinstance(rule.get("when"), dict) else None
+            location = manifest_entry_path(entry.index, property_name if isinstance(property_name, str) else None)
+            raise ManifestError(f"{entry.describe()} at {location}: {message}")
 
 
 def validate_semantic_rules(entries: list[ManifestEntry], rules_config: dict[str, Any], repo_root: Path) -> None:
@@ -652,8 +703,13 @@ def write_normalized_manifest(entries: list[ManifestEntry], destination: Path) -
 
 
 def load_normalized_manifest(path: Path) -> list[ManifestEntry]:
-    with path.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except json.JSONDecodeError as exc:
+        raise ManifestError(
+            f"Normalized manifest file '{path}' is invalid: {exc.msg} at line {exc.lineno}, column {exc.colno}."
+        ) from exc
 
     if not isinstance(data, dict) or not isinstance(data.get("entries"), list):
         raise ManifestError(f"Normalized manifest file '{path}' must contain an object with an entries array.")
@@ -687,11 +743,19 @@ def fetch_source_bytes(entry: ManifestEntry, source_token: str | None) -> bytes:
         message = (
             f"Unable to fetch source for {entry.describe()} (HTTP {exc.code}). "
             "If the source repository is private, provide the optional read-only source_token secret. "
-            "Otherwise verify source_repo, source_ref, and source_path."
+            "Otherwise verify source_repo, source_ref, and source_path. Source field locations: "
+            f"{manifest_entry_path(entry.index, 'source_repo')}, "
+            f"{manifest_entry_path(entry.index, 'source_ref')}, "
+            f"{manifest_entry_path(entry.index, 'source_path')}."
         )
         raise SourceFetchError(message) from exc
     except urllib.error.URLError as exc:
-        raise SourceFetchError(f"Unable to fetch source for {entry.describe()}: {exc.reason}.") from exc
+        raise SourceFetchError(
+            f"Unable to fetch source for {entry.describe()}: {exc.reason}. Source field locations: "
+            f"{manifest_entry_path(entry.index, 'source_repo')}, "
+            f"{manifest_entry_path(entry.index, 'source_ref')}, "
+            f"{manifest_entry_path(entry.index, 'source_path')}."
+        ) from exc
 
 
 def read_file_bytes(path: Path) -> bytes:

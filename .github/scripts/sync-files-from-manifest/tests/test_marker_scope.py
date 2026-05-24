@@ -4,15 +4,32 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPT_DIR))
 
+import common  # noqa: E402
 import sync_files  # noqa: E402
-from common import ManifestEntry, ManifestError, Markers, SourceFetchError, write_normalized_manifest  # noqa: E402
-from marker_scope import compose_marker_scoped_bytes, parse_marker_bytes  # noqa: E402
+from common import (  # noqa: E402
+    ManifestEntry,
+    ManifestError,
+    Markers,
+    SourceFetchError,
+    default_rules_path,
+    default_schema_path,
+    fetch_source_bytes,
+    load_manifest_metadata,
+    load_normalized_manifest,
+    load_schema,
+    normalize_repo_relative_path,
+    parse_markers,
+    validate_and_normalize_manifest,
+    write_normalized_manifest,
+)
+from marker_scope import compose_marker_scoped_bytes, parse_marker_bytes, text_location  # noqa: E402
 
 
 START = "<!-- START -->"
@@ -44,6 +61,39 @@ def make_entry(
 
 def as_bytes(value: str) -> bytes:
     return value.encode("utf-8")
+
+
+def manifest_json(entries: list[dict[str, object]]) -> str:
+    import json
+
+    return json.dumps({"schema_version": 1, "entries": entries})
+
+
+def manifest_entry_payload(
+    *,
+    source_repo: str = "owner/repo",
+    source_ref: str = "main",
+    source_path: str = "managed.md",
+    target_path: str = "managed.md",
+    direction: str = "source_to_target",
+    lifecycle_policy: str = "enforce",
+    uniqueness_policy: str = "none",
+    managed_scope: str = "whole_file",
+    markers: dict[str, str] | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "source_repo": source_repo,
+        "source_ref": source_ref,
+        "source_path": source_path,
+        "target_path": target_path,
+        "direction": direction,
+        "lifecycle_policy": lifecycle_policy,
+        "uniqueness_policy": uniqueness_policy,
+        "managed_scope": managed_scope,
+    }
+    if markers is not None:
+        payload["markers"] = markers
+    return payload
 
 
 class MarkerScopeCompositionTests(unittest.TestCase):
@@ -256,8 +306,64 @@ class MarkerScopeCompositionTests(unittest.TestCase):
     def test_utf8_decode_failure_fails_clearly(self) -> None:
         entry = make_entry("inside_markers")
 
-        with self.assertRaisesRegex(ManifestError, "strict UTF-8"):
+        with self.assertRaisesRegex(ManifestError, "strict UTF-8.*byte offset 0\\.\\.1"):
             parse_marker_bytes(b"\xff\xfe" + as_bytes(f"{START}{END}"), entry, "source")
+
+    def test_text_location_counts_lf_lines_and_columns(self) -> None:
+        location = text_location("alpha\nbeta", 6)
+
+        self.assertEqual(location.line, 2)
+        self.assertEqual(location.column, 1)
+        self.assertEqual(location.offset, 6)
+
+    def test_text_location_counts_crlf_as_one_newline(self) -> None:
+        location = text_location("alpha\r\nbeta", 7)
+
+        self.assertEqual(location.line, 2)
+        self.assertEqual(location.column, 1)
+        self.assertEqual(location.offset, 7)
+
+    def test_end_marker_before_start_reports_line_column(self) -> None:
+        entry = make_entry("inside_markers")
+
+        with self.assertRaisesRegex(ManifestError, r"line 2, column 1, char offset 6"):
+            parse_marker_bytes(as_bytes(f"intro\n{END} tail"), entry, "source")
+
+    def test_start_marker_without_matching_end_reports_line_column(self) -> None:
+        entry = make_entry("inside_markers")
+
+        with self.assertRaisesRegex(ManifestError, r"line 2, column 1, char offset 6"):
+            parse_marker_bytes(as_bytes(f"intro\n{START} tail"), entry, "source")
+
+    def test_nested_start_marker_reports_nested_line_column(self) -> None:
+        entry = make_entry("inside_markers")
+
+        with self.assertRaisesRegex(ManifestError, r"line 2, column 7, char offset 26"):
+            parse_marker_bytes(as_bytes(f"{START}outer\ninner {START} nested{END}"), entry, "source")
+
+    def test_no_exact_marker_blocks_reports_expected_markers_and_content_length(self) -> None:
+        entry = make_entry("inside_markers")
+
+        with self.assertRaises(ManifestError) as context:
+            parse_marker_bytes(as_bytes("plain text"), entry, "source")
+
+        message = str(context.exception)
+        self.assertIn("exact start marker", message)
+        self.assertIn(repr(START), message)
+        self.assertIn(repr(END), message)
+        self.assertIn("content length is 10 character(s)", message)
+
+    def test_outside_partial_mismatch_reports_counts_and_target_marker_location(self) -> None:
+        entry = make_entry("outside_markers")
+        source = f"A{START}s1{END}B{START}s2{END}C"
+        target = f"target\n{START}t1{END}BC"
+
+        with self.assertRaises(ManifestError) as context:
+            compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+        message = str(context.exception)
+        self.assertIn("source has 2 block(s), target has 1 block(s)", message)
+        self.assertIn("target marker block starts: #1 at line 2, column 1", message)
 
 
 class MarkerScopeSyncLifecycleTests(unittest.TestCase):
@@ -609,6 +715,170 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             os.environ["GITHUB_OUTPUT"] = str(second_output)
             sync_files.sync_entries(root, manifest_path, None)
             self.assertIn("changed=false", second_output.read_text(encoding="utf-8"))
+
+    def test_verify_drift_reports_first_differing_byte_offset(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("whole_file")
+            target = root / entry.target_path
+            target.write_bytes(b"abc")
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(b"axc")
+
+            with self.assertRaises(ManifestError) as context:
+                sync_files.verify_entries(root, manifest_path, None)
+
+            self.assertIn("First differing byte offset: 1", str(context.exception))
+
+    def test_marker_verify_drift_reports_target_line_column_on_utf8_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("inside_markers")
+            target = root / entry.target_path
+            target.write_bytes(as_bytes(f"line1\nprefix {START}old{END} tail"))
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(as_bytes(f"source\nprefix {START}new{END} source-tail"))
+
+            with self.assertRaises(ManifestError) as context:
+                sync_files.verify_entries(root, manifest_path, None)
+
+            message = str(context.exception)
+            self.assertIn("First differing byte offset:", message)
+            self.assertIn("target line 2, column", message)
+
+    def test_marker_verify_drift_omits_line_column_inside_multibyte_sequence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("inside_markers")
+            target = root / entry.target_path
+            target.write_bytes(as_bytes(f"{START}é{END}"))
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(as_bytes(f"{START}è{END}"))
+
+            with self.assertRaises(ManifestError) as context:
+                sync_files.verify_entries(root, manifest_path, None)
+
+            message = str(context.exception)
+            self.assertIn("First differing byte offset:", message)
+            self.assertNotIn("target line", message)
+
+    def test_malformed_normalized_manifest_reports_line_column(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "normalized.json"
+            path.write_text('{\n  "entries": [\n', encoding="utf-8")
+
+            with self.assertRaises(ManifestError) as context:
+                load_normalized_manifest(path)
+
+            message = str(context.exception)
+            self.assertIn("Normalized manifest file", message)
+            self.assertIn("line 3, column 1", message)
+
+    def test_duplicate_target_semantic_error_includes_jsonpath(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manifest = manifest_json(
+                [
+                    manifest_entry_payload(source_repo="owner/one", source_path="same.md", target_path="same.md"),
+                    manifest_entry_payload(source_repo="owner/two", source_path="same.md", target_path="same.md"),
+                ]
+            )
+
+            with self.assertRaises(ManifestError) as context:
+                validate_and_normalize_manifest(
+                    manifest,
+                    Path(temp_dir),
+                    default_schema_path(),
+                    default_rules_path(),
+                )
+
+            message = str(context.exception)
+            self.assertIn("$.entries[2].target_path", message)
+            self.assertIn("$.entries[1].target_path", message)
+
+    def test_basename_mismatch_semantic_error_includes_jsonpaths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manifest = manifest_json(
+                [
+                    manifest_entry_payload(source_path="source.md", target_path="target.md"),
+                ]
+            )
+
+            with self.assertRaises(ManifestError) as context:
+                validate_and_normalize_manifest(
+                    manifest,
+                    Path(temp_dir),
+                    default_schema_path(),
+                    default_rules_path(),
+                )
+
+            message = str(context.exception)
+            self.assertIn("$.entries[1].source_path", message)
+            self.assertIn("$.entries[1].target_path", message)
+
+    def test_unsafe_path_semantic_error_includes_jsonpath(self) -> None:
+        with self.assertRaises(ManifestError) as context:
+            normalize_repo_relative_path("../bad.md", "target_path", 1)
+
+        self.assertIn("$.entries[1].target_path", str(context.exception))
+
+    def test_marker_semantic_error_includes_jsonpath(self) -> None:
+        metadata = load_manifest_metadata(load_schema(default_schema_path()))
+
+        with self.assertRaises(ManifestError) as context:
+            parse_markers({"markers": {"start": START, "end": START}}, metadata, 1)
+
+        self.assertIn("$.entries[1].markers", str(context.exception))
+
+    def test_reserved_target_path_semantic_error_includes_jsonpath(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manifest = manifest_json(
+                [
+                    manifest_entry_payload(
+                        source_path="managed.md",
+                        target_path="_sync-files-from-manifest-workflow/managed.md",
+                    ),
+                ]
+            )
+
+            with self.assertRaises(ManifestError) as context:
+                validate_and_normalize_manifest(
+                    manifest,
+                    Path(temp_dir),
+                    default_schema_path(),
+                    default_rules_path(),
+                )
+
+            self.assertIn("$.entries[1].target_path", str(context.exception))
+
+    def test_source_fetch_failure_includes_source_field_jsonpath_hints(self) -> None:
+        entry = make_entry("whole_file")
+        original_urlopen = common.urllib.request.urlopen
+
+        def fail_urlopen(*args: object, **kwargs: object) -> object:
+            raise urllib.error.URLError("boom")
+
+        common.urllib.request.urlopen = fail_urlopen
+        try:
+            with self.assertRaises(SourceFetchError) as context:
+                fetch_source_bytes(entry, None)
+        finally:
+            common.urllib.request.urlopen = original_urlopen
+
+        message = str(context.exception)
+        self.assertIn("$.entries[1].source_repo", message)
+        self.assertIn("$.entries[1].source_ref", message)
+        self.assertIn("$.entries[1].source_path", message)
+
+    def test_atomic_write_mkdir_failure_is_wrapped_in_manifest_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            parent_file = root / "not-a-directory"
+            parent_file.write_text("file", encoding="utf-8")
+
+            with self.assertRaises(ManifestError) as context:
+                sync_files.write_file_bytes_atomically(parent_file / "child.txt", b"content")
+
+            self.assertIn("Unable to write target file", str(context.exception))
 
 
 if __name__ == "__main__":

@@ -24,6 +24,13 @@ class TextSlice:
 
 
 @dataclass(frozen=True)
+class TextLocation:
+    line: int
+    column: int
+    offset: int
+
+
+@dataclass(frozen=True)
 class MarkerBlock:
     index: int
     start_delimiter: TextSlice
@@ -43,18 +50,83 @@ def is_marker_scope(entry: ManifestEntry) -> bool:
     return entry.managed_scope in {MANAGED_SCOPE_INSIDE_MARKERS, MANAGED_SCOPE_OUTSIDE_MARKERS}
 
 
+def text_location(text: str, offset: int) -> TextLocation:
+    """Return 1-based line/column for a decoded-text character offset.
+
+    Column is a Unicode code-point index within the line, not a visual display
+    column and not a UTF-16 column. CRLF, bare LF, and bare CR each count as one
+    newline sequence.
+    """
+    bounded_offset = max(0, min(offset, len(text)))
+    line = 1
+    column = 1
+    position = 0
+
+    while position < bounded_offset:
+        character = text[position]
+        if character == "\r":
+            if position + 1 < len(text) and text[position + 1] == "\n":
+                position += 2
+            else:
+                position += 1
+            line += 1
+            column = 1
+            continue
+        if character == "\n":
+            position += 1
+            line += 1
+            column = 1
+            continue
+
+        position += 1
+        column += 1
+
+    return TextLocation(line=line, column=column, offset=offset)
+
+
+def format_text_location(text: str, offset: int) -> str:
+    location = text_location(text, offset)
+    return f"line {location.line}, column {location.column}, char offset {location.offset}"
+
+
+def format_block_start_locations(role: str, parsed: ParsedMarkerContent) -> str:
+    if not parsed.blocks:
+        return f"{role} marker block starts: none"
+    locations = ", ".join(
+        f"#{block.index} at {format_text_location(parsed.text, block.start_delimiter.start)}"
+        for block in parsed.blocks
+    )
+    return f"{role} marker block starts: {locations}"
+
+
 def _marker_error(
     entry: ManifestEntry,
     role: str,
     message: str,
     occurrence_index: int | None = None,
+    *,
+    text: str | None = None,
+    offset: int | None = None,
+    expected_start_marker: str | None = None,
+    expected_end_marker: str | None = None,
 ) -> ManifestError:
     occurrence = ""
     if occurrence_index is not None:
         occurrence = f" at marker occurrence {occurrence_index}"
+    location = ""
+    if text is not None and offset is not None:
+        location = f" at {format_text_location(text, offset)}"
+    expected = ""
+    if expected_start_marker is not None and expected_end_marker is not None:
+        expected = (
+            f" Searched {role} content for exact start marker {expected_start_marker!r} "
+            f"and exact end marker {expected_end_marker!r}; content length is "
+            f"{len(text) if text is not None else 0} character(s)."
+        )
     return ManifestError(
         f"{entry.describe()} marker parse error in {role} content for target_path "
-        f"'{entry.target_path}' with managed_scope '{entry.managed_scope}'{occurrence}: {message}"
+        f"'{entry.target_path}' with managed_scope '{entry.managed_scope}'{occurrence}"
+        f"{location}: {message}{expected}"
     )
 
 
@@ -70,7 +142,8 @@ def decode_marker_bytes(content: bytes, entry: ManifestEntry, role: str) -> str:
     except UnicodeDecodeError as exc:
         raise ManifestError(
             f"{entry.describe()} cannot decode {role} content for target_path '{entry.target_path}' "
-            f"with managed_scope '{entry.managed_scope}' as strict UTF-8: {exc}."
+            f"with managed_scope '{entry.managed_scope}' as strict UTF-8 at byte offset "
+            f"{exc.start}..{exc.end}: {exc}."
         ) from exc
 
 
@@ -108,6 +181,8 @@ def parse_marker_text(
                 role,
                 "found an end marker before a matching start marker.",
                 next_occurrence,
+                text=text,
+                offset=next_end,
             )
 
         if next_start == -1:
@@ -121,7 +196,14 @@ def parse_marker_text(
         start_end = start_begin + len(start_marker)
         end_begin = text.find(end_marker, start_end)
         if end_begin == -1:
-            raise _marker_error(entry, role, "found a start marker without a matching end marker.", next_occurrence)
+            raise _marker_error(
+                entry,
+                role,
+                "found a start marker without a matching end marker.",
+                next_occurrence,
+                text=text,
+                offset=start_begin,
+            )
 
         nested_start = text.find(start_marker, start_end)
         if nested_start != -1 and nested_start < end_begin:
@@ -130,6 +212,8 @@ def parse_marker_text(
                 role,
                 "found a nested start marker before the matching end marker.",
                 next_occurrence,
+                text=text,
+                offset=nested_start,
             )
 
         end_end = end_begin + len(end_marker)
@@ -150,7 +234,15 @@ def parse_marker_text(
         message = "found no exact marker blocks."
         if role == "target" and entry.managed_scope == MANAGED_SCOPE_INSIDE_MARKERS:
             message = INSIDE_TARGET_MARKERS_REQUIRED_MESSAGE
-        raise _marker_error(entry, role, message, 1)
+        raise _marker_error(
+            entry,
+            role,
+            message,
+            1,
+            text=text,
+            expected_start_marker=start_marker,
+            expected_end_marker=end_marker,
+        )
 
     return ParsedMarkerContent(
         role=role,
@@ -189,13 +281,19 @@ def _assert_matching_block_counts(
         raise ManifestError(
             f"{entry.describe()} marker block count mismatch for target_path '{entry.target_path}' "
             f"with managed_scope '{entry.managed_scope}': source has {len(source.blocks)} block(s), "
-            f"target has {len(target.blocks)} block(s). {INSIDE_TARGET_MARKERS_REQUIRED_MESSAGE}"
+            f"target has {len(target.blocks)} block(s). "
+            f"{format_block_start_locations('source', source)}; "
+            f"{format_block_start_locations('target', target)}. "
+            f"{INSIDE_TARGET_MARKERS_REQUIRED_MESSAGE}"
         )
 
     raise ManifestError(
         f"{entry.describe()} marker block count mismatch for target_path '{entry.target_path}' "
         f"with managed_scope '{entry.managed_scope}': source has {len(source.blocks)} block(s), "
-        f"target has {len(target.blocks)} block(s). {OUTSIDE_PARTIAL_MARKERS_MESSAGE}"
+        f"target has {len(target.blocks)} block(s). "
+        f"{format_block_start_locations('source', source)}; "
+        f"{format_block_start_locations('target', target)}. "
+        f"{OUTSIDE_PARTIAL_MARKERS_MESSAGE}"
     )
 
 
