@@ -25,7 +25,6 @@ The reusable workflow reads the manifest, validates it against the schema bundle
 - Two-way synchronization is accepted by the manifest schema but rejected by current execution rules before source fetch or write.
 - Rename aliases where source and target basenames differ are rejected.
 - Extra tracked files are not deleted.
-- Marker-scoped entries are accepted by the manifest schema but rejected by current execution rules before source fetch or write.
 - Timestamp or newer-wins conflict resolution is not part of the current workflow behavior.
 - Large binary assets are outside the intended use case.
 
@@ -92,8 +91,50 @@ Each entry is a strict one-to-one mapping and is valid only as an item of `Manif
 | `direction` | Yes | [`Direction`](types/direction.md) | Entry scalar | Synchronization direction. The current version executes only `source_to_target`. |
 | `lifecycle_policy` | Yes | [`LifecyclePolicy`](types/lifecycle-policy.md) | Entry scalar | Runtime behavior for missing, existing, and changed targets. |
 | `uniqueness_policy` | Yes | [`UniquenessPolicy`](types/uniqueness-policy.md) | Entry scalar | Optional repository-wide basename uniqueness enforcement. |
-| `managed_scope` | Yes | [`ManagedScope`](types/managed-scope.md) | Entry scalar | Portion of the target file managed by the workflow. The current version executes `whole_file`. |
+| `managed_scope` | Yes | [`ManagedScope`](types/managed-scope.md) | Entry scalar | Portion of the target file managed by the workflow. |
 | `markers` | Conditional | [`Markers`](types/markers.md) | Nested child object | Required for marker-scoped entries and forbidden for `whole_file`. |
+
+## Marker-Scoped Examples
+
+`inside_markers` lets the source own content inside each marker block while the target owns all outside content:
+
+```json
+{
+  "source_repo": "BionicCode/template-visual-studio-repository",
+  "source_ref": "main",
+  "source_path": "AGENTS.md",
+  "target_path": "AGENTS.md",
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "inside_markers",
+  "markers": {
+    "start": "<!-- BEGIN MANAGED SECTION -->",
+    "end": "<!-- END MANAGED SECTION -->"
+  }
+}
+```
+
+`outside_markers` lets the source own content outside each marker block while the target owns the inside content:
+
+```json
+{
+  "source_repo": "BionicCode/template-visual-studio-repository",
+  "source_ref": "main",
+  "source_path": "AGENTS.md",
+  "target_path": "AGENTS.md",
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "outside_markers",
+  "markers": {
+    "start": "<!-- BEGIN REPOSITORY SPECIFICS -->",
+    "end": "<!-- END REPOSITORY SPECIFICS -->"
+  }
+}
+```
+
+Marker-scoped synchronization is intended for text files. Marker-scoped source and target files are decoded and encoded as strict UTF-8.
 
 ## Markers Fields
 
@@ -110,6 +151,11 @@ Current marker validation criteria:
 - `markers` is forbidden for `managed_scope: "whole_file"`.
 - `markers.start` and `markers.end` are required non-empty strings.
 - `markers.start` and `markers.end` must not be identical.
+- Marker matching is exact substring matching.
+- Multiple marker blocks and adjacent marker blocks are allowed.
+- Nested marker blocks are rejected.
+- Source and target marker blocks are matched by occurrence order.
+- Existing source and target files must have the same number of marker blocks.
 
 ## Mapping Rules
 

@@ -29,7 +29,7 @@
       ]
     },
     {
-      "name": "reject_stage1_non_source_to_target",
+      "name": "reject_non_source_to_target",
       "enabled": true,
       "when": {
         "property": "direction",
@@ -38,19 +38,7 @@
           "two_way"
         ]
       },
-      "message": "Only direction=source_to_target is executable in Stage 1."
-    },
-    {
-      "name": "reject_stage1_marker_scoped_execution",
-      "enabled": true,
-      "when": {
-        "property": "managed_scope",
-        "in": [
-          "outside_markers",
-          "inside_markers"
-        ]
-      },
-      "message": "Marker-scoped manifest entries are schema-valid but not executable in Stage 1."
+      "message": "Only direction=source_to_target is executable in the current version."
     },
     {
       "name": "worktree_target_path_safety",

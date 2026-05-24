@@ -612,8 +612,7 @@ def validate_semantic_rules(entries: list[ManifestEntry], rules_config: dict[str
         "worktree_target_path_safety": lambda rule: run_worktree_target_path_safety(entries, rule, repo_root),
         "basename_unique_tracked_file_scan": lambda rule: run_basename_unique_tracked_file_scan(entries, rule, repo_root),
         "reject_matching_entries": lambda rule: run_reject_matching_entries(entries, rule),
-        "reject_stage1_non_source_to_target": lambda rule: run_reject_matching_entries(entries, rule),
-        "reject_stage1_marker_scoped_execution": lambda rule: run_reject_matching_entries(entries, rule),
+        "reject_non_source_to_target": lambda rule: run_reject_matching_entries(entries, rule),
     }
 
     for rule in enabled_rules(rules_config):

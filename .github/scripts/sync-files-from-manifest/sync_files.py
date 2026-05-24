@@ -18,6 +18,11 @@ from common import (
     target_abspath,
     write_file_bytes,
 )
+from marker_scope import (
+    compose_marker_scoped_bytes,
+    is_marker_scope,
+    validate_source_marker_blocks,
+)
 
 
 LIFECYCLE_DISABLED = "disabled"
@@ -42,11 +47,53 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def assert_stage1_executable(entry: ManifestEntry) -> None:
-    if entry.managed_scope != MANAGED_SCOPE_WHOLE_FILE:
+def is_whole_file_scope(entry: ManifestEntry) -> bool:
+    return entry.managed_scope == MANAGED_SCOPE_WHOLE_FILE
+
+
+def assert_supported_scope(entry: ManifestEntry) -> None:
+    if not is_whole_file_scope(entry) and not is_marker_scope(entry):
+        raise ManifestError(f"{entry.describe()} uses unsupported managed_scope '{entry.managed_scope}'.")
+
+
+def verify_enforced_entry(
+    entry: ManifestEntry,
+    target_path: Path,
+    source_token: str | None,
+) -> None:
+    if not target_path.is_file():
+        raise ManifestError(f"{entry.describe()} is missing enforced target '{entry.target_path}'.")
+
+    source_bytes = fetch_source_bytes(entry, source_token)
+    target_bytes = read_file_bytes(target_path)
+    expected_bytes = (
+        source_bytes
+        if is_whole_file_scope(entry)
+        else compose_marker_scoped_bytes(source_bytes, target_bytes, entry)
+    )
+
+    if target_bytes != expected_bytes:
         raise ManifestError(
-            f"{entry.describe()} is recognized by the manifest schema but not yet supported in execution for v1."
+            f"{entry.describe()} is out of sync with its canonical source. "
+            "Merge the sync PR created by this workflow."
         )
+
+    log_info(f"Verified target is in sync for {entry.describe()}.")
+
+
+def expected_sync_bytes(
+    entry: ManifestEntry,
+    source_bytes: bytes,
+    current_bytes: bytes | None,
+) -> bytes:
+    if is_whole_file_scope(entry):
+        return source_bytes
+
+    if current_bytes is None:
+        validate_source_marker_blocks(source_bytes, entry)
+        return source_bytes
+
+    return compose_marker_scoped_bytes(source_bytes, current_bytes, entry)
 
 
 def verify_entries(repo_root: Path, normalized_manifest_path: Path, source_token: str | None) -> None:
@@ -54,7 +101,7 @@ def verify_entries(repo_root: Path, normalized_manifest_path: Path, source_token
 
     for entry in entries:
         log_info(f"Verifying {entry.describe()}.")
-        assert_stage1_executable(entry)
+        assert_supported_scope(entry)
 
         target_path = target_abspath(repo_root, entry.target_path)
         assert_safe_worktree_file_path(repo_root, target_path, entry.target_path, entry.describe())
@@ -74,18 +121,7 @@ def verify_entries(repo_root: Path, normalized_manifest_path: Path, source_token
         if entry.lifecycle_policy != LIFECYCLE_ENFORCE:
             raise ManifestError(f"{entry.describe()} uses unsupported lifecycle policy '{entry.lifecycle_policy}'.")
 
-        source_bytes = fetch_source_bytes(entry, source_token)
-        if not target_path.is_file():
-            raise ManifestError(f"{entry.describe()} is missing enforced target '{entry.target_path}'.")
-
-        target_bytes = read_file_bytes(target_path)
-        if target_bytes != source_bytes:
-            raise ManifestError(
-                f"{entry.describe()} is out of sync with its canonical source. "
-                "Merge the sync PR created by this workflow."
-            )
-
-        log_info(f"Verified target is in sync for {entry.describe()}.")
+        verify_enforced_entry(entry, target_path, source_token)
 
 
 def build_pr_body(changed_entries: list[ManifestEntry]) -> str:
@@ -114,7 +150,7 @@ def sync_entries(repo_root: Path, normalized_manifest_path: Path, source_token: 
 
     for entry in entries:
         log_info(f"Synchronizing {entry.describe()}.")
-        assert_stage1_executable(entry)
+        assert_supported_scope(entry)
 
         target_path = target_abspath(repo_root, entry.target_path)
         assert_safe_worktree_file_path(repo_root, target_path, entry.target_path, entry.describe())
@@ -132,12 +168,13 @@ def sync_entries(repo_root: Path, normalized_manifest_path: Path, source_token: 
 
         source_bytes = fetch_source_bytes(entry, source_token)
         current_bytes = read_file_bytes(target_path) if target_path.is_file() else None
+        expected_bytes = expected_sync_bytes(entry, source_bytes, current_bytes)
 
-        if current_bytes == source_bytes:
+        if current_bytes == expected_bytes:
             log_info(f"Target already matches canonical source for {entry.describe()}.")
             continue
 
-        write_file_bytes(target_path, source_bytes)
+        write_file_bytes(target_path, expected_bytes)
         changed_entries.append(entry)
         changed_paths.append(entry.target_path)
         log_info(f"Updated target '{entry.target_path}' for {entry.describe()}.")

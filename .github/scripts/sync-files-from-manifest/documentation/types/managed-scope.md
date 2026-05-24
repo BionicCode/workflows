@@ -15,14 +15,18 @@ Declares which portion of the target file is managed by the workflow.
 | Value | Supported | Markers | Description |
 |---|---:|---|---|
 | `whole_file` | Yes | Forbidden | The entire target file is managed by the source file content. |
-| `outside_markers` | No | Required | Accepted by the manifest schema and rejected by current execution rules before source fetch or write. |
-| `inside_markers` | No | Required | Accepted by the manifest schema and rejected by current execution rules before source fetch or write. |
+| `outside_markers` | Yes | Required | Source owns content outside marker blocks. Target owns content inside marker blocks and the marker delimiters. |
+| `inside_markers` | Yes | Required | Source owns content inside marker blocks. Target owns content outside marker blocks and the marker delimiters. |
 
 ## Notes
 
-Current marker validation criteria:
+Marker-scoped synchronization is text-file behavior. Marker-scoped files are decoded and encoded as strict UTF-8.
+
+Marker validation criteria:
 
 - `markers` is required for `outside_markers` and `inside_markers`.
 - `markers` is forbidden for `whole_file`.
 - `markers.start` and `markers.end` are required non-empty strings.
 - `markers.start` and `markers.end` must not be identical.
+- Marker delimiters are matched as exact text, not regular expressions.
+- Source and target marker blocks are matched by occurrence order.
