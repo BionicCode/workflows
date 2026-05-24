@@ -7,6 +7,13 @@ from common import ManifestEntry, ManifestError
 
 MANAGED_SCOPE_INSIDE_MARKERS = "inside_markers"
 MANAGED_SCOPE_OUTSIDE_MARKERS = "outside_markers"
+INSIDE_TARGET_MARKERS_REQUIRED_MESSAGE = (
+    "inside_markers requires target marker blocks because source-owned content inside the markers must be enforced."
+)
+OUTSIDE_PARTIAL_MARKERS_MESSAGE = (
+    "Target contains a partial set of marker blocks. Either keep all source-defined marker blocks, "
+    "remove all target-owned marker blocks, or add marker IDs in a future manifest version."
+)
 
 
 @dataclass(frozen=True)
@@ -77,7 +84,13 @@ def encode_marker_text(content: str, entry: ManifestEntry) -> bytes:
         ) from exc
 
 
-def parse_marker_text(text: str, entry: ManifestEntry, role: str) -> ParsedMarkerContent:
+def parse_marker_text(
+    text: str,
+    entry: ManifestEntry,
+    role: str,
+    *,
+    require_blocks: bool = True,
+) -> ParsedMarkerContent:
     start_marker, end_marker = _require_markers(entry)
     position = 0
     outside_start = 0
@@ -133,8 +146,11 @@ def parse_marker_text(text: str, entry: ManifestEntry, role: str) -> ParsedMarke
 
     outside_segments.append(TextSlice(outside_start, len(text), text[outside_start:]))
 
-    if not blocks:
-        raise _marker_error(entry, role, "found no exact marker blocks.", 1)
+    if require_blocks and not blocks:
+        message = "found no exact marker blocks."
+        if role == "target" and entry.managed_scope == MANAGED_SCOPE_INSIDE_MARKERS:
+            message = INSIDE_TARGET_MARKERS_REQUIRED_MESSAGE
+        raise _marker_error(entry, role, message, 1)
 
     return ParsedMarkerContent(
         role=role,
@@ -144,8 +160,14 @@ def parse_marker_text(text: str, entry: ManifestEntry, role: str) -> ParsedMarke
     )
 
 
-def parse_marker_bytes(content: bytes, entry: ManifestEntry, role: str) -> ParsedMarkerContent:
-    return parse_marker_text(decode_marker_bytes(content, entry, role), entry, role)
+def parse_marker_bytes(
+    content: bytes,
+    entry: ManifestEntry,
+    role: str,
+    *,
+    require_blocks: bool = True,
+) -> ParsedMarkerContent:
+    return parse_marker_text(decode_marker_bytes(content, entry, role), entry, role, require_blocks=require_blocks)
 
 
 def validate_source_marker_blocks(source_bytes: bytes, entry: ManifestEntry) -> None:
@@ -157,12 +179,28 @@ def _assert_matching_block_counts(
     target: ParsedMarkerContent,
     entry: ManifestEntry,
 ) -> None:
-    if len(source.blocks) != len(target.blocks):
+    if len(source.blocks) == len(target.blocks):
+        return
+
+    if entry.managed_scope == MANAGED_SCOPE_OUTSIDE_MARKERS and not target.blocks:
+        return
+
+    if entry.managed_scope == MANAGED_SCOPE_INSIDE_MARKERS:
         raise ManifestError(
             f"{entry.describe()} marker block count mismatch for target_path '{entry.target_path}' "
             f"with managed_scope '{entry.managed_scope}': source has {len(source.blocks)} block(s), "
-            f"target has {len(target.blocks)} block(s)."
+            f"target has {len(target.blocks)} block(s). {INSIDE_TARGET_MARKERS_REQUIRED_MESSAGE}"
         )
+
+    raise ManifestError(
+        f"{entry.describe()} marker block count mismatch for target_path '{entry.target_path}' "
+        f"with managed_scope '{entry.managed_scope}': source has {len(source.blocks)} block(s), "
+        f"target has {len(target.blocks)} block(s). {OUTSIDE_PARTIAL_MARKERS_MESSAGE}"
+    )
+
+
+def compose_source_outside_projection(source: ParsedMarkerContent) -> str:
+    return "".join(segment.text for segment in source.outside_segments)
 
 
 def compose_marker_scoped_text(
@@ -184,6 +222,9 @@ def compose_marker_scoped_text(
         return "".join(pieces)
 
     if entry.managed_scope == MANAGED_SCOPE_OUTSIDE_MARKERS:
+        if not target.blocks:
+            return compose_source_outside_projection(source)
+
         for block_index, target_block in enumerate(target.blocks):
             pieces.append(source.outside_segments[block_index].text)
             pieces.append(target_block.start_delimiter.text)
@@ -197,5 +238,10 @@ def compose_marker_scoped_text(
 
 def compose_marker_scoped_bytes(source_bytes: bytes, target_bytes: bytes, entry: ManifestEntry) -> bytes:
     source = parse_marker_bytes(source_bytes, entry, "source")
-    target = parse_marker_bytes(target_bytes, entry, "target")
+    target = parse_marker_bytes(
+        target_bytes,
+        entry,
+        "target",
+        require_blocks=entry.managed_scope != MANAGED_SCOPE_OUTSIDE_MARKERS,
+    )
     return encode_marker_text(compose_marker_scoped_text(source, target, entry), entry)

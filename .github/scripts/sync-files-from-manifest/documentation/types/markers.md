@@ -39,7 +39,11 @@ Marker delimiter object used by marker-scoped managed scopes.
 - Adjacent marker blocks are allowed.
 - Empty inside content and empty outside content are allowed.
 - Nested marker blocks are rejected.
+- Source marker blocks define the authoritative sync regions where deterministic enforcement is possible.
 - Source and target marker blocks are matched by occurrence order.
-- Source and target marker block count mismatch fails before write.
+- `inside_markers` requires the target to contain the same number of exact marker blocks as the source.
+- `inside_markers` does not prove same source-context position because outside content is target-owned; stronger moved-block enforcement requires marker IDs, named anchors, or source-owned outside context anchors.
+- `outside_markers` allows an existing target to omit all source-defined target-owned marker blocks when the target equals the source outside projection.
+- `outside_markers` rejects partial marker block omission and extra exact marker blocks before write.
 - When a target file exists, composed output preserves marker delimiter slices from the target file.
 - Marker-scoped synchronization is text-file behavior and uses strict UTF-8 decoding and encoding.

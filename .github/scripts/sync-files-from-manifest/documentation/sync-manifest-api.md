@@ -10,7 +10,7 @@ The caller-owned manifest lives at:
 
 The authoritative schema and runtime rules are bundled with the reusable workflow version being executed. The schema copied into a caller repository is for editor tooling and human guidance.
 
-Marker-scoped synchronization is supported for strict UTF-8 text files. Marker delimiters are matched exactly, marker blocks are matched by occurrence order, and existing target delimiter text is preserved.
+Marker-scoped synchronization is supported for strict UTF-8 text files. Source marker blocks define authoritative sync regions where deterministically enforceable, marker delimiters are matched exactly, marker blocks are matched by occurrence order, and existing target delimiter text is preserved.
 
 ## Types
 

@@ -71,6 +71,24 @@ class MarkerScopeCompositionTests(unittest.TestCase):
             as_bytes(f"source outside {START}target inside{END} source tail"),
         )
 
+    def test_outside_markers_empty_source_block_can_be_omitted_by_target(self) -> None:
+        entry = make_entry("outside_markers")
+        source = f"before{START}{END}after"
+        target = "beforeafter"
+
+        result = compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+        self.assertEqual(result, as_bytes("beforeafter"))
+
+    def test_outside_markers_placeholder_source_block_can_be_omitted_by_target(self) -> None:
+        entry = make_entry("outside_markers")
+        source = f"before{START}placeholder{END}after"
+        target = "beforeafter"
+
+        result = compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+        self.assertEqual(result, as_bytes("beforeafter"))
+
     def test_multiple_inside_marker_blocks_match_by_occurrence_order(self) -> None:
         entry = make_entry("inside_markers")
         source = f"A{START}s1{END}B{START}s2{END}C"
@@ -89,6 +107,15 @@ class MarkerScopeCompositionTests(unittest.TestCase):
 
         self.assertEqual(result, as_bytes(f"A{START}t1{END}B{START}t2{END}C"))
 
+    def test_multiple_outside_marker_blocks_can_all_be_omitted_by_target(self) -> None:
+        entry = make_entry("outside_markers")
+        source = f"A{START}s1{END}B{START}s2{END}C"
+        target = "ABC"
+
+        result = compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+        self.assertEqual(result, as_bytes("ABC"))
+
     def test_adjacent_outside_marker_blocks_remain_independent(self) -> None:
         entry = make_entry("outside_markers")
         source = f"A{START}s1{END}{START}s2{END}C"
@@ -106,6 +133,20 @@ class MarkerScopeCompositionTests(unittest.TestCase):
         result = compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
 
         self.assertEqual(result, as_bytes(f"X{START}s1{END}{START}s2{END}Z"))
+
+    def test_inside_markers_equal_count_blocks_are_occurrence_matched_without_context_detection(self) -> None:
+        entry = make_entry("inside_markers")
+        source = f"A{START}s1{END}B{START}s2{END}C"
+        # Outside content is target-owned for inside_markers, so this intentionally
+        # does not infer same-source-context movement without marker IDs/context anchors.
+        target = f"target prefix {START}t1{END} moved outside {START}t2{END} target tail"
+
+        result = compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+        self.assertEqual(
+            result,
+            as_bytes(f"target prefix {START}s1{END} moved outside {START}s2{END} target tail"),
+        )
 
     def test_same_line_markers_and_empty_inner_content_are_valid(self) -> None:
         entry = make_entry("inside_markers")
@@ -163,7 +204,47 @@ class MarkerScopeCompositionTests(unittest.TestCase):
         source = f"A{START}s1{END}B"
         target = f"X{START}t1{END}Y{START}t2{END}Z"
 
-        with self.assertRaisesRegex(ManifestError, "marker block count mismatch"):
+        with self.assertRaisesRegex(ManifestError, "partial set of marker blocks"):
+            compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+    def test_outside_markers_partial_marker_set_fails(self) -> None:
+        entry = make_entry("outside_markers")
+        source = f"A{START}s1{END}B{START}s2{END}C"
+        target = f"A{START}t1{END}BC"
+
+        with self.assertRaisesRegex(ManifestError, "partial set of marker blocks"):
+            compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+    def test_inside_markers_zero_target_blocks_fail(self) -> None:
+        entry = make_entry("inside_markers")
+        source = f"A{START}s1{END}B"
+        target = "AB"
+
+        with self.assertRaisesRegex(ManifestError, "inside_markers requires target marker blocks"):
+            compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+    def test_inside_markers_removed_target_delimiters_and_body_fail(self) -> None:
+        entry = make_entry("inside_markers")
+        source = f"A{START}s1{END}B"
+        target = "A local outside B"
+
+        with self.assertRaisesRegex(ManifestError, "inside_markers requires target marker blocks"):
+            compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+    def test_inside_markers_extra_exact_target_block_fails(self) -> None:
+        entry = make_entry("inside_markers")
+        source = f"A{START}s1{END}B"
+        target = f"X{START}t1{END}Y{START}t2{END}Z"
+
+        with self.assertRaisesRegex(ManifestError, "inside_markers requires target marker blocks"):
+            compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
+
+    def test_outside_markers_target_keeps_original_block_and_adds_another_fails(self) -> None:
+        entry = make_entry("outside_markers")
+        source = f"A{START}s1{END}B"
+        target = f"A{START}t1{END}B{START}extra{END}C"
+
+        with self.assertRaisesRegex(ManifestError, "partial set of marker blocks"):
             compose_marker_scoped_bytes(as_bytes(source), as_bytes(target), entry)
 
     def test_marker_like_non_exact_text_does_not_match(self) -> None:
@@ -273,6 +354,50 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             sync_files.sync_entries(root, manifest_path, None)
 
             self.assertEqual(target.read_bytes(), as_bytes(f"source {START}local{END} source-tail"))
+
+    def test_outside_projection_with_zero_target_blocks_verifies_without_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("outside_markers")
+            target = root / entry.target_path
+            target.write_bytes(as_bytes("source  source-tail"))
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(as_bytes(f"source {START}placeholder{END} source-tail"))
+
+            sync_files.verify_entries(root, manifest_path, None)
+            sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertEqual(target.read_bytes(), as_bytes("source  source-tail"))
+
+    def test_outside_projection_removed_delimiters_but_kept_body_is_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("outside_markers")
+            target = root / entry.target_path
+            target.write_bytes(as_bytes("source placeholder source-tail"))
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(as_bytes(f"source {START}placeholder{END} source-tail"))
+
+            with self.assertRaisesRegex(ManifestError, "out of sync"):
+                sync_files.verify_entries(root, manifest_path, None)
+
+            sync_files.sync_entries(root, manifest_path, None)
+            self.assertEqual(target.read_bytes(), as_bytes("source  source-tail"))
+
+    def test_outside_projection_custom_text_where_block_was_omitted_is_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("outside_markers")
+            target = root / entry.target_path
+            target.write_bytes(as_bytes("source custom source-tail"))
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(as_bytes(f"source {START}placeholder{END} source-tail"))
+
+            with self.assertRaisesRegex(ManifestError, "out of sync"):
+                sync_files.verify_entries(root, manifest_path, None)
+
+            sync_files.sync_entries(root, manifest_path, None)
+            self.assertEqual(target.read_bytes(), as_bytes("source  source-tail"))
 
     def test_whole_file_behavior_remains_byte_for_byte(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

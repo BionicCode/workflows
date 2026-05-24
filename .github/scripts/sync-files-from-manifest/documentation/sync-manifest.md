@@ -96,7 +96,7 @@ Each entry is a strict one-to-one mapping and is valid only as an item of `Manif
 
 ## Marker-Scoped Examples
 
-`inside_markers` lets the source own content inside each marker block while the target owns all outside content:
+`inside_markers` lets the source own content inside each marker block while the target owns all outside content. Existing targets must keep the same number of exact marker blocks as the source, matched by occurrence order:
 
 ```json
 {
@@ -115,7 +115,7 @@ Each entry is a strict one-to-one mapping and is valid only as an item of `Manif
 }
 ```
 
-`outside_markers` lets the source own content outside each marker block while the target owns the inside content:
+`outside_markers` lets the source own content outside each marker block while the target owns the inside content. Existing targets may keep all marker blocks, or omit all marker blocks and match the source outside projection:
 
 ```json
 {
@@ -154,8 +154,12 @@ Current marker validation criteria:
 - Marker matching is exact substring matching.
 - Multiple marker blocks and adjacent marker blocks are allowed.
 - Nested marker blocks are rejected.
+- Source marker blocks define the authoritative sync regions where deterministically enforceable.
 - Source and target marker blocks are matched by occurrence order.
-- Existing source and target files must have the same number of marker blocks.
+- `inside_markers` requires matching exact marker block count and occurrence order.
+- `inside_markers` does not prove same source-context position because outside content is target-owned; stronger moved-block enforcement requires future marker IDs, named anchors, or source-owned outside context anchors.
+- `outside_markers` allows complete omission of all source-defined target-owned blocks when the target equals the source outside projection.
+- `outside_markers` rejects partial marker block omission and extra target fences until marker IDs or named blocks exist.
 
 ## Mapping Rules
 
