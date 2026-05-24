@@ -4,7 +4,7 @@ import argparse
 import os
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from common import (
     ManifestEntry,
@@ -17,6 +17,7 @@ from common import (
     log_error,
     log_info,
     read_file_bytes,
+    run_basename_unique_tracked_file_scan,
     target_abspath,
 )
 from marker_scope import (
@@ -25,6 +26,7 @@ from marker_scope import (
     text_location,
     validate_source_marker_blocks,
 )
+from source_glob import expand_source_glob_entry, list_source_tree_files
 
 
 LIFECYCLE_DISABLED = "disabled"
@@ -141,7 +143,7 @@ def expected_sync_bytes(
 
 
 def verify_entries(repo_root: Path, normalized_manifest_path: Path, source_token: str | None) -> None:
-    entries = load_normalized_manifest(normalized_manifest_path)
+    entries = expand_entries_for_execution(load_normalized_manifest(normalized_manifest_path), repo_root, source_token)
 
     for entry in entries:
         log_info(f"Verifying {entry.describe()}.")
@@ -216,6 +218,72 @@ def plan_sync_entry(repo_root: Path, entry: ManifestEntry, source_token: str | N
     return PlannedWrite(entry=entry, target_path=target_path, expected_bytes=expected_bytes)
 
 
+def expand_entries_for_execution(
+    entries: list[ManifestEntry],
+    repo_root: Path,
+    source_token: str | None,
+) -> list[ManifestEntry]:
+    expanded_entries: list[ManifestEntry] = []
+    for entry in entries:
+        assert_supported_scope(entry)
+
+        if entry.lifecycle_policy == LIFECYCLE_DISABLED:
+            log_info(f"Skipping {entry.describe()} because lifecycle_policy is disabled.")
+            continue
+
+        if entry.is_glob_entry:
+            log_info(f"Expanding {entry.describe()}.")
+            source_paths = list_source_tree_files(entry, source_token)
+            expanded_entries.extend(expand_source_glob_entry(entry, source_paths))
+        else:
+            expanded_entries.append(entry)
+
+    validate_expanded_entries(expanded_entries, repo_root)
+    return expanded_entries
+
+
+def validate_expanded_entries(entries: list[ManifestEntry], repo_root: Path) -> None:
+    seen_sources: dict[tuple[str, str, str], ManifestEntry] = {}
+    seen_targets: dict[str, ManifestEntry] = {}
+
+    for entry in entries:
+        if entry.source_path is None:
+            raise ManifestError(f"{entry.describe()} must be expanded to an exact source_path before execution.")
+
+        existing_source = seen_sources.get(entry.source_identity_key)
+        if existing_source is not None:
+            raise ManifestError(
+                f"{entry.describe()} duplicates generated source identity already produced by "
+                f"{existing_source.describe()}."
+            )
+        seen_sources[entry.source_identity_key] = entry
+
+        existing_target = seen_targets.get(entry.target_identity_key)
+        if existing_target is not None:
+            raise ManifestError(
+                f"Duplicate generated target_path '{entry.target_path}' from {entry.describe()} and "
+                f"{existing_target.describe()}."
+            )
+        seen_targets[entry.target_identity_key] = entry
+
+        if PurePosixPath(entry.source_path).name != PurePosixPath(entry.target_path).name:
+            raise ManifestError(
+                f"{entry.describe()} has a basename mismatch between expanded source_path "
+                f"'{entry.source_path}' and expanded target_path '{entry.target_path}'."
+            )
+
+    run_basename_unique_tracked_file_scan(
+        entries,
+        {
+            "when": {
+                "property": "uniqueness_policy",
+                "equals": "basename_unique",
+            }
+        },
+        repo_root,
+    )
+
+
 def write_file_bytes_atomically(path: Path, content: bytes) -> None:
     temp_path: Path | None = None
 
@@ -252,7 +320,7 @@ def commit_planned_writes(planned_writes: list[PlannedWrite]) -> None:
 
 
 def sync_entries(repo_root: Path, normalized_manifest_path: Path, source_token: str | None) -> None:
-    entries = load_normalized_manifest(normalized_manifest_path)
+    entries = expand_entries_for_execution(load_normalized_manifest(normalized_manifest_path), repo_root, source_token)
     planned_writes: list[PlannedWrite] = []
 
     for entry in entries:

@@ -28,6 +28,7 @@ Using `@main` is acceptable during development and early testing. After release,
 - `.github/scripts/sync-files-from-manifest/schema/sync-manifest.schema.json`
 - `.github/scripts/sync-files-from-manifest/schema/sync-rules.json`
 - `.github/scripts/sync-files-from-manifest/templates/sync-manifest.template.json`
+- `.github/scripts/sync-files-from-manifest/documentation/`
 - `.github/scripts/sync-files-from-manifest/*.py`
 
 Each caller repository owns its manifest at:
@@ -110,8 +111,9 @@ Each entry supports:
 
 - `source_repo`
 - `source_ref`
-- `source_path`
+- exactly one of `source_path` or `source_glob`
 - `target_path`
+- optional `glob` settings for `source_glob`
 - `direction`
 - `lifecycle_policy`
 - `uniqueness_policy`
@@ -139,13 +141,38 @@ Marker delimiters are exact substring matches. They are not regular expressions 
 
 | Feature | Schema-valid | Runtime-supported | Notes |
 |---|---:|---:|---|
+| `source_path` exact-file sync | Yes | Yes | One source file maps to one target file. |
+| `source_glob` directory/file-set sync | Yes | Yes | Expands matching source files into exact-file sync operations. |
 | `source_to_target` + `whole_file` | Yes | Yes | Byte-for-byte target replacement or verification. |
 | `source_to_target` + `outside_markers` | Yes | Yes | Source outside content is enforced; target-owned blocks may be preserved or fully omitted by projection. |
 | `source_to_target` + `inside_markers` | Yes | Yes | Source inner content is enforced by occurrence order. |
 | `target_to_source` | Yes | No | Recognized for future contract stability; rejected by current execution rules. |
 | `two_way` | Yes | No | Recognized for future contract stability; rejected by current execution rules. |
-| Directory or glob sync | No | No | Add explicit one-to-one manifest entries instead. |
 | Delete unmatched targets | No | No | Extra files are not deleted automatically. |
+
+### `source_path` Vs `source_glob`
+
+`source_path` means exactly one source file. Wildcards are not interpreted in `source_path`.
+
+`source_glob` means many source files. The workflow expands the pattern into deterministic exact-file sync operations before verify or sync planning. `target_path` must end with `/` for `source_glob` entries and is treated as the target directory root. Relative layout below the glob base directory is preserved. No workflow-call inputs changed for this feature.
+
+Example recursive documentation sync:
+
+```json
+{
+  "source_repo": "BionicCode/workflows",
+  "source_ref": "main",
+  "source_glob": ".github/scripts/sync-files-from-manifest/documentation/**/*.md",
+  "target_path": ".github/sync-config/documentation/",
+  "glob": {
+    "recursive": true
+  },
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "whole_file"
+}
+```
 
 ### Marker-Scoped Behavior
 
@@ -180,6 +207,7 @@ Python semantic validation handles checks that require normalization, Git state,
 - duplicate normalized source identities
 - duplicate normalized target paths
 - source/target basename mismatches
+- `source_glob` local pattern safety
 - repository-relative safe paths
 - file-like paths only
 - reserved `_sync-files-from-manifest-workflow/` target paths
@@ -279,11 +307,32 @@ Seed a starter file once:
 }
 ```
 
+Sync workflow manifest documentation recursively:
+
+```json
+{
+  "source_repo": "BionicCode/workflows",
+  "source_ref": "main",
+  "source_glob": ".github/scripts/sync-files-from-manifest/documentation/**/*.md",
+  "target_path": ".github/sync-config/documentation/",
+  "glob": {
+    "recursive": true
+  },
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "whole_file"
+}
+```
+
 ### Failure Mode Examples
 
 - Old top-level array manifest: wrap the array under `entries` and add `schema_version`.
 - Duplicate `target_path`: each normalized target path may appear once.
 - Basename mismatch: `source_path` and `target_path` basenames must match.
+- `source_glob` with `target_path` not ending in `/`: glob targets must be directory roots.
+- `source_glob` with no matches: the workflow fails rather than creating an empty sync PR.
+- `source_glob` tree truncation: source enumeration fails rather than syncing a partial file set.
 - Private source without `source_token`: provide an explicit read-only source token secret.
 - Marker exact-match failure: marker delimiters must match the manifest strings exactly.
 - `outside_markers` partial marker mismatch: keep all source-defined marker blocks or omit all target-owned blocks.
@@ -300,14 +349,16 @@ Seed a starter file once:
 
 Current:
 
+- `source_path`
+- `source_glob`
 - `source_to_target`
 - `whole_file`
 - `outside_markers`
 - `inside_markers`
 
-Planned:
+Not supported:
 
-- directory or glob sync
+- delete unmatched target files
 
 Possible later:
 

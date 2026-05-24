@@ -29,7 +29,17 @@
     "repoRelativeFilePath": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?($|/))(?!.*//).+[^/]$"
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?($|/))(?!.*//).+[^/]$"
+    },
+    "repoRelativeDirectoryPath": {
+      "type": "string",
+      "minLength": 2,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?($|/))(?!.*//).+/$"
+    },
+    "repoRelativeGlobPattern": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?($|/))(?!.*//).+[^/]$"
     },
     "manifestEntry": {
       "type": "object",
@@ -37,7 +47,6 @@
       "required": [
         "source_repo",
         "source_ref",
-        "source_path",
         "target_path",
         "direction",
         "lifecycle_policy",
@@ -57,8 +66,26 @@
         "source_path": {
           "$ref": "#/$defs/repoRelativeFilePath"
         },
+        "source_glob": {
+          "$ref": "#/$defs/repoRelativeGlobPattern"
+        },
         "target_path": {
-          "$ref": "#/$defs/repoRelativeFilePath"
+          "type": "string",
+          "minLength": 1
+        },
+        "glob": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "recursive": {
+              "type": "boolean",
+              "default": false
+            },
+            "include_hidden": {
+              "type": "boolean",
+              "default": false
+            }
+          }
         },
         "direction": {
           "type": "string",
@@ -112,6 +139,63 @@
       },
       "allOf": [
         {
+          "oneOf": [
+            {
+              "required": [
+                "source_path"
+              ],
+              "not": {
+                "required": [
+                  "source_glob"
+                ]
+              }
+            },
+            {
+              "required": [
+                "source_glob"
+              ],
+              "not": {
+                "required": [
+                  "source_path"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "if": {
+            "required": [
+              "source_path"
+            ]
+          },
+          "then": {
+            "properties": {
+              "target_path": {
+                "$ref": "#/$defs/repoRelativeFilePath"
+              }
+            },
+            "not": {
+              "required": [
+                "glob"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "source_glob"
+            ]
+          },
+          "then": {
+            "properties": {
+              "target_path": {
+                "$ref": "#/$defs/repoRelativeDirectoryPath"
+              }
+            }
+          }
+        },
+        {
           "if": {
             "properties": {
               "managed_scope": {
@@ -162,11 +246,15 @@
       "source_repo": "source_repo",
       "source_ref": "source_ref",
       "source_path": "source_path",
+      "source_glob": "source_glob",
       "target_path": "target_path",
       "direction": "direction",
       "lifecycle_policy": "lifecycle_policy",
       "uniqueness_policy": "uniqueness_policy",
       "managed_scope": "managed_scope",
+      "glob": "glob",
+      "glob_recursive": "recursive",
+      "glob_include_hidden": "include_hidden",
       "markers": "markers",
       "marker_start": "start",
       "marker_end": "end"

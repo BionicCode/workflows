@@ -12,7 +12,7 @@ The reusable workflow reads the manifest, validates it against the schema bundle
 
 ## What The Manifest Does
 
-- Declares strict one-to-one mappings from source files to target files.
+- Declares exact source-file mappings and glob-expanded file-set mappings.
 - Supports source files from multiple repositories in one workflow run.
 - Supports nested repository-relative target paths.
 - Defines lifecycle, uniqueness, and managed-scope policy for each mapping.
@@ -32,12 +32,13 @@ The reusable workflow reads the manifest, validates it against the schema bundle
 
 | Feature | Schema-valid | Runtime-supported | Notes |
 |---|---:|---:|---|
+| `source_path` exact-file sync | Yes | Yes | One source file maps to one target file. |
+| `source_glob` directory/file-set sync | Yes | Yes | Expands matching source files into exact-file sync operations. |
 | `source_to_target` + `whole_file` | Yes | Yes | Byte-for-byte source-to-target sync. |
 | `source_to_target` + `outside_markers` | Yes | Yes | Source owns outside content; target inner content is preserved or fully omitted by projection. |
 | `source_to_target` + `inside_markers` | Yes | Yes | Source inner content is enforced by occurrence order. |
 | `target_to_source` | Yes | No | Rejected by current execution rules. |
 | `two_way` | Yes | No | Rejected by current execution rules. |
-| Directory or glob sync | No | No | Use explicit one-to-one entries. |
 | Delete unmatched targets | No | No | Extra files are not deleted automatically. |
 
 ## Complete Shape
@@ -75,6 +76,7 @@ This example shows the complete manifest structure, including the conditional `m
 | [`ManifestEntry`](types/manifest-entry.md) | Array item object | `ManifestDocument` | `entries[]` | One strict managed-file mapping. |
 | [`Markers`](types/markers.md) | Nested object | `ManifestEntry` | `markers` | Marker delimiter object for marker-scoped entries. |
 | [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Scalar string | `ManifestEntry` | `source_path`, `target_path` | Repository-relative file path. |
+| [`SourceSelector`](types/source-selector.md) | Entry field group | `ManifestEntry` | `source_path` or `source_glob` | Selects either one exact file or a glob-expanded file set. |
 | [`Direction`](types/direction.md) | Enum string | `ManifestEntry` | `direction` | Synchronization direction. |
 | [`LifecyclePolicy`](types/lifecycle-policy.md) | Enum string | `ManifestEntry` | `lifecycle_policy` | Missing, changed, and existing target behavior. |
 | [`UniquenessPolicy`](types/uniqueness-policy.md) | Enum string | `ManifestEntry` | `uniqueness_policy` | Basename uniqueness policy. |
@@ -92,14 +94,18 @@ Old top-level array manifests are rejected. Wrap the array under `entries` and a
 
 ## ManifestEntry Fields
 
-Each entry is a strict one-to-one mapping and is valid only as an item of `ManifestDocument.entries`.
+Each entry is valid only as an item of `ManifestDocument.entries`. It uses exactly one source selector: `source_path` for one file, or `source_glob` for a file set expanded into exact-file operations.
 
 | Field | Required | Type | Child Level | Description |
 |---|---:|---|---|---|
 | `source_repo` | Yes | string | Entry scalar | Source repository in `owner/repository` form. |
 | `source_ref` | Yes | string | Entry scalar | Source branch, tag, or commit SHA. |
-| `source_path` | Yes | [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Entry scalar | Source file path inside `source_repo`. |
-| `target_path` | Yes | [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Entry scalar | Target file path inside the caller repository. Parent directories are created as needed. |
+| `source_path` | Conditional | [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Entry scalar | Exact source file path. Required when `source_glob` is absent. Wildcards are not interpreted. |
+| `source_glob` | Conditional | string | Entry scalar | Source file pattern. Required when `source_path` is absent. Must contain at least one glob metacharacter. |
+| `target_path` | Yes | [`RepoRelativeFilePath`](types/repo-relative-file-path.md) | Entry scalar | Target file path for `source_path`, or target directory root ending in `/` for `source_glob`. |
+| `glob` | No | object | Nested child object | Options for `source_glob`. Ignored for exact `source_path` entries and forbidden by schema there. |
+| `glob.recursive` | No | boolean | Glob scalar | Defaults to `false`. Allows `**` when `true`. |
+| `glob.include_hidden` | No | boolean | Glob scalar | Defaults to `false`. Lets wildcard segments match dot-prefixed path segments when `true`. |
 | `direction` | Yes | [`Direction`](types/direction.md) | Entry scalar | Synchronization direction. The current version executes only `source_to_target`. |
 | `lifecycle_policy` | Yes | [`LifecyclePolicy`](types/lifecycle-policy.md) | Entry scalar | Runtime behavior for missing, existing, and changed targets. |
 | `uniqueness_policy` | Yes | [`UniquenessPolicy`](types/uniqueness-policy.md) | Entry scalar | Optional repository-wide basename uniqueness enforcement. |
@@ -119,6 +125,101 @@ Each entry is a strict one-to-one mapping and is valid only as an item of `Manif
   "direction": "source_to_target",
   "lifecycle_policy": "enforce",
   "uniqueness_policy": "basename_unique",
+  "managed_scope": "whole_file"
+}
+```
+
+## `source_glob`
+
+`source_glob` selects a file set in the source repository. It expands into many exact-file sync operations before verify or sync planning. Existing `source_path` behavior is unchanged.
+
+Rules:
+
+- Exactly one of `source_path` or `source_glob` is required.
+- `source_glob` must be repository-relative and use forward slashes.
+- `source_glob` must contain at least one glob metacharacter: `*`, `?`, or `[`.
+- Use `source_path` instead of `source_glob` for exact files without metacharacters.
+- `target_path` must end with `/` for `source_glob` entries.
+- `target_path` is treated as a directory root for expanded files.
+- Relative layout below the glob base directory is preserved.
+- `*.*` only matches names containing a dot. Use `*` for all files, `*.md` for Markdown files, and `**/*.md` with `glob.recursive: true` for recursive Markdown sync.
+- Unmatched target files are not deleted.
+
+Glob matching is deterministic and Unix-style. `*`, `?`, and character classes match within one path segment. `**` matches zero or more complete path segments only when `glob.recursive` is `true`.
+
+Hidden matching:
+
+- `glob.include_hidden: false` prevents wildcard segments from implicitly matching dot-prefixed path segments.
+- Explicitly named dot segments such as `.github` are allowed.
+- A pattern segment starting with `.` may match dot-prefixed names for that segment only.
+- `glob.include_hidden: true` broadly allows wildcard segments to match hidden path segments.
+
+Examples:
+
+- `.github/scripts/**/*.md` is allowed with `include_hidden: false` because `.github` is explicit.
+- `**/*.md` does not traverse `.github` when `include_hidden: false`.
+- `docs/*.md` does not match `docs/.hidden.md` when `include_hidden: false`.
+- `docs/.*.md` may match dot-prefixed files in `docs`.
+
+Recursive documentation sync:
+
+```json
+{
+  "source_repo": "BionicCode/workflows",
+  "source_ref": "main",
+  "source_glob": ".github/scripts/sync-files-from-manifest/documentation/**/*.md",
+  "target_path": ".github/sync-config/documentation/",
+  "glob": {
+    "recursive": true
+  },
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "whole_file"
+}
+```
+
+Top-level Markdown only:
+
+```json
+{
+  "source_repo": "owner/repo",
+  "source_ref": "main",
+  "source_glob": "docs/*.md",
+  "target_path": "docs/",
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "whole_file"
+}
+```
+
+Flat all-file sync:
+
+```json
+{
+  "source_repo": "owner/repo",
+  "source_ref": "main",
+  "source_glob": "docs/*",
+  "target_path": "docs/",
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
+  "managed_scope": "whole_file"
+}
+```
+
+Name-fragment filter:
+
+```json
+{
+  "source_repo": "BionicCode/workflows",
+  "source_ref": "main",
+  "source_glob": ".github/scripts/sync-files-from-manifest/documentation/sync-manifest*.md",
+  "target_path": ".github/sync-config/documentation/",
+  "direction": "source_to_target",
+  "lifecycle_policy": "enforce",
+  "uniqueness_policy": "none",
   "managed_scope": "whole_file"
 }
 ```
@@ -214,6 +315,11 @@ Current marker validation criteria:
 - Old top-level array manifest: wrap the array under `entries` and add `schema_version`.
 - Duplicate target path: each normalized `target_path` may appear once.
 - Basename mismatch: `basename(source_path)` must equal `basename(target_path)`.
+- `source_glob` with no metacharacter: use `source_path` for exact-file sync.
+- `source_glob` with `**` and `glob.recursive: false`: enable `glob.recursive`.
+- `source_glob` matched zero files: the workflow fails clearly before writes.
+- Source tree response truncated: the workflow refuses partial sync.
+- Duplicate generated target path: overlapping globs or exact entries map to the same target.
 - Private source without `source_token`: pass an explicit read-only source token secret.
 - Marker exact-match failure: source or target delimiter text does not match the manifest exactly.
 - `outside_markers` partial marker mismatch: target has some but not all source-defined marker blocks, or adds extra exact marker blocks.
@@ -228,20 +334,22 @@ Current marker validation criteria:
 - Marker scopes are for UTF-8 text files.
 - `whole_file` remains byte-for-byte behavior and can handle binary files when GitHub source-fetch behavior supports them.
 - Large files are constrained by GitHub repository contents/raw API behavior.
+- Glob expansion uses GitHub source tree listing. Recursive tree responses can be truncated by GitHub; truncated enumeration fails rather than syncing a partial file set.
 
 ## Roadmap
 
-- Current: `source_to_target`, `whole_file`, `outside_markers`, and `inside_markers`.
-- Planned: directory or glob sync.
+- Current: `source_path`, `source_glob`, `source_to_target`, `whole_file`, `outside_markers`, and `inside_markers`.
+- Not supported: delete unmatched target files.
 - Possible later: delete policy, marker IDs, named anchors, or source-owned outside context anchors.
 - Deferred: `target_to_source` and `two_way`.
 
 ## Mapping Rules
 
-- Each normalized source identity may appear once.
-- Each normalized target path may appear once.
-- `basename(source_path)` must equal `basename(target_path)`.
-- Source and target paths must be repository-relative file paths.
+- Each normalized exact source identity may appear once.
+- Each normalized exact or expanded target path may appear once.
+- For exact `source_path` entries, `basename(source_path)` must equal `basename(target_path)`.
+- For `source_glob` entries, basename validation applies after expansion because parent `target_path` is a directory root.
+- Exact `source_path` values and expanded target file paths must be repository-relative file paths. `source_glob` values must be repository-relative POSIX patterns.
 - `target_path` must not be under `_sync-files-from-manifest-workflow/`.
 
 ## Authentication

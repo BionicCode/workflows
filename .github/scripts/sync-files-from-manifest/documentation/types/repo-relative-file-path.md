@@ -1,6 +1,6 @@
 # RepoRelativeFilePath
 
-Repository-relative file path string.
+Repository-relative path string used by exact file mappings and target paths.
 
 ## Placement
 
@@ -38,7 +38,9 @@ _sync-files-from-manifest-workflow/generated.md
 
 - Must use forward slashes.
 - Must be relative to the repository root.
-- Must point to a file-like path, not a directory.
+- `source_path` must point to a file-like path, not a directory.
+- `target_path` must point to a file-like path for `source_path` entries.
+- `target_path` must end with `/` and is treated as a directory root for `source_glob` entries.
 - Must not contain empty path segments.
 - Must not contain `.` or `..` path segments.
 - `target_path` must not be under `_sync-files-from-manifest-workflow/`, which is reserved workflow scratch space.

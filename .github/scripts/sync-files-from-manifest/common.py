@@ -20,6 +20,24 @@ GITHUB_API_VERSION = "2022-11-28"
 SOURCE_FETCH_TIMEOUT_SECONDS = 30
 RESERVED_TARGET_PATH_PREFIXES = ("_sync-files-from-manifest-workflow/",)
 
+FIELD_SOURCE_REPO = "source_repo"
+FIELD_SOURCE_REF = "source_ref"
+FIELD_SOURCE_PATH = "source_path"
+FIELD_SOURCE_GLOB = "source_glob"
+FIELD_TARGET_PATH = "target_path"
+FIELD_DIRECTION = "direction"
+FIELD_LIFECYCLE_POLICY = "lifecycle_policy"
+FIELD_UNIQUENESS_POLICY = "uniqueness_policy"
+FIELD_MANAGED_SCOPE = "managed_scope"
+FIELD_MARKERS = "markers"
+FIELD_MARKER_START = "start"
+FIELD_MARKER_END = "end"
+FIELD_GLOB = "glob"
+FIELD_GLOB_RECURSIVE = "recursive"
+FIELD_GLOB_INCLUDE_HIDDEN = "include_hidden"
+
+GLOB_METACHARACTERS = ("*", "?", "[")
+
 
 class ManifestError(Exception):
     """Raised when the manifest or repository policy validation fails."""
@@ -67,18 +85,28 @@ class Markers:
 
 
 @dataclass(frozen=True)
+class GlobOptions:
+    recursive: bool = False
+    include_hidden: bool = False
+
+
+@dataclass(frozen=True)
 class ManifestEntry:
     index: int
     source_repo: str
     source_ref: str
-    source_path: str
+    source_path: str | None
     target_path: str
     direction: str
     lifecycle_policy: str
     uniqueness_policy: str
     managed_scope: str
+    source_glob: str | None = None
+    glob: GlobOptions | None = None
     markers: Markers | None = None
     manifest_properties: dict[str, Any] | None = None
+    expanded_file_index: int | None = None
+    parent_source_glob: str | None = None
 
     @property
     def basename(self) -> str:
@@ -86,16 +114,31 @@ class ManifestEntry:
 
     @property
     def source_identity_key(self) -> tuple[str, str, str]:
-        return (self.source_repo, self.source_ref, self.source_path)
+        source_selector = self.source_path if self.source_path is not None else f"glob:{self.source_glob}"
+        return (self.source_repo, self.source_ref, source_selector)
 
     @property
     def target_identity_key(self) -> str:
         return self.target_path
 
+    @property
+    def is_glob_entry(self) -> bool:
+        return self.source_glob is not None and self.source_path is None
+
+    @property
+    def source_label(self) -> str:
+        if self.source_path is not None:
+            return self.source_path
+        return f"source_glob:{self.source_glob}"
+
     def describe(self) -> str:
+        prefix = f"manifest entry {self.index}"
+        if self.expanded_file_index is not None:
+            prefix += f" expanded file {self.expanded_file_index}"
+
         return (
-            f"manifest entry {self.index} "
-            f"({self.source_repo}@{self.source_ref}:{self.source_path} -> {self.target_path}; "
+            f"{prefix} "
+            f"({self.source_repo}@{self.source_ref}:{self.source_label} -> {self.target_path}; "
             f"lifecycle={self.lifecycle_policy}, "
             f"uniqueness={self.uniqueness_policy}, "
             f"scope={self.managed_scope})"
@@ -110,13 +153,21 @@ class ManifestEntry:
             "index": self.index,
             "source_repo": self.source_repo,
             "source_ref": self.source_ref,
-            "source_path": self.source_path,
             "target_path": self.target_path,
             "direction": self.direction,
             "lifecycle_policy": self.lifecycle_policy,
             "uniqueness_policy": self.uniqueness_policy,
             "managed_scope": self.managed_scope,
         }
+        if self.source_path is not None:
+            data["source_path"] = self.source_path
+        if self.source_glob is not None:
+            data["source_glob"] = self.source_glob
+            glob_options = self.glob or GlobOptions()
+            data["glob"] = {
+                "recursive": glob_options.recursive,
+                "include_hidden": glob_options.include_hidden,
+            }
         if self.markers is not None:
             data["markers"] = {"start": self.markers.start, "end": self.markers.end}
         return data
@@ -132,13 +183,21 @@ class ManifestEntry:
             index=int(data["index"]),
             source_repo=str(data["source_repo"]),
             source_ref=str(data["source_ref"]),
-            source_path=str(data["source_path"]),
+            source_path=str(data["source_path"]) if data.get("source_path") is not None else None,
+            source_glob=str(data["source_glob"]) if data.get("source_glob") is not None else None,
+            glob=GlobOptions(
+                recursive=bool((data.get("glob") or {}).get("recursive", False)),
+                include_hidden=bool((data.get("glob") or {}).get("include_hidden", False)),
+            )
+            if data.get("source_glob") is not None
+            else None,
             target_path=str(data["target_path"]),
             direction=str(data["direction"]),
             lifecycle_policy=str(data["lifecycle_policy"]),
             uniqueness_policy=str(data["uniqueness_policy"]),
             managed_scope=str(data["managed_scope"]),
             markers=marker_value,
+            manifest_properties=dict(data),
         )
 
 
@@ -313,19 +372,18 @@ def normalize_source_repo(value: str, index: int, field_name: str = "source_repo
 
 
 def normalize_repo_relative_path(value: str, field_name: str, index: int) -> str:
+    return normalize_repo_relative_file_path(value, field_name, index)
+
+
+def validate_repo_relative_segments(value: str, field_name: str, index: int) -> list[str]:
     if "\\" in value:
         raise ManifestError(
             f"Manifest entry {index}: '{field_name}' must use forward slashes "
             f"at {manifest_entry_path(index, field_name)}."
         )
-    if value.startswith("/"):
+    if value.startswith("/") or (len(value) >= 2 and value[1] == ":"):
         raise ManifestError(
-            f"Manifest entry {index}: '{field_name}' must be repository-relative, not absolute "
-            f"at {manifest_entry_path(index, field_name)}."
-        )
-    if value.endswith("/"):
-        raise ManifestError(
-            f"Manifest entry {index}: '{field_name}' must point to a file path, not a directory "
+            f"Manifest entry {index}: '{field_name}' must be repository-relative, not absolute or drive-qualified "
             f"at {manifest_entry_path(index, field_name)}."
         )
 
@@ -341,6 +399,17 @@ def normalize_repo_relative_path(value: str, field_name: str, index: int) -> str
             f"at {manifest_entry_path(index, field_name)}."
         )
 
+    return segments
+
+
+def normalize_repo_relative_file_path(value: str, field_name: str, index: int) -> str:
+    if value.endswith("/"):
+        raise ManifestError(
+            f"Manifest entry {index}: '{field_name}' must point to a file path, not a directory "
+            f"at {manifest_entry_path(index, field_name)}."
+        )
+
+    validate_repo_relative_segments(value, field_name, index)
     normalized = PurePosixPath(value).as_posix()
     if normalized in {"", "."} or PurePosixPath(normalized).name in {"", ".", ".."}:
         raise ManifestError(
@@ -349,6 +418,81 @@ def normalize_repo_relative_path(value: str, field_name: str, index: int) -> str
         )
 
     return normalized
+
+
+def normalize_repo_relative_directory_path(value: str, field_name: str, index: int) -> str:
+    if not value.endswith("/"):
+        raise ManifestError(
+            f"Manifest entry {index} uses source_glob, so target_path must be a directory path ending with '/' "
+            f"at {manifest_entry_path(index, field_name)}."
+        )
+
+    trimmed_value = value[:-1]
+    validate_repo_relative_segments(trimmed_value, field_name, index)
+    normalized = PurePosixPath(trimmed_value).as_posix()
+    if normalized in {"", "."}:
+        raise ManifestError(
+            f"Manifest entry {index}: '{field_name}' must point to a non-root directory "
+            f"at {manifest_entry_path(index, field_name)}."
+        )
+    return f"{normalized}/"
+
+
+def contains_glob_metacharacter(value: str) -> bool:
+    return any(character in value for character in GLOB_METACHARACTERS)
+
+
+def normalize_source_glob(value: str, field_name: str, index: int, recursive: bool) -> str:
+    if value.endswith("/"):
+        raise ManifestError(
+            f"Manifest entry {index}: '{field_name}' must point to file patterns, not a directory-only pattern "
+            f"at {manifest_entry_path(index, field_name)}."
+        )
+
+    segments = validate_repo_relative_segments(value, field_name, index)
+    if not contains_glob_metacharacter(value):
+        raise ManifestError(
+            f"Manifest entry {index}: source_glob '{value}' must contain at least one glob metacharacter; "
+            f"use source_path for exact-file sync at {manifest_entry_path(index, field_name)}."
+        )
+
+    for segment in segments:
+        if "**" in segment and segment != "**":
+            raise ManifestError(
+                f"Manifest entry {index}: source_glob uses '**' inside path segment '{segment}', "
+                f"but '**' is only supported as a complete path segment at {manifest_entry_path(index, field_name)}."
+            )
+        if segment == "**" and not recursive:
+            raise ManifestError(
+                f"Manifest entry {index}: source_glob uses '**' but glob.recursive is false "
+                f"at {manifest_entry_path(index, field_name)}."
+            )
+
+    return PurePosixPath(value).as_posix()
+
+
+def parse_glob_options(raw_entry: dict[str, Any], index: int) -> GlobOptions:
+    raw_glob = raw_entry.get(FIELD_GLOB)
+    if raw_glob is None:
+        return GlobOptions()
+    if not isinstance(raw_glob, dict):
+        raise ManifestError(
+            f"Manifest entry {index}: 'glob' must be an object at {manifest_entry_path(index, FIELD_GLOB)}."
+        )
+
+    recursive = raw_glob.get(FIELD_GLOB_RECURSIVE, False)
+    include_hidden = raw_glob.get(FIELD_GLOB_INCLUDE_HIDDEN, False)
+    if not isinstance(recursive, bool):
+        raise ManifestError(
+            f"Manifest entry {index}: 'glob.recursive' must be a boolean "
+            f"at {manifest_entry_path(index, f'{FIELD_GLOB}.{FIELD_GLOB_RECURSIVE}')}."
+        )
+    if not isinstance(include_hidden, bool):
+        raise ManifestError(
+            f"Manifest entry {index}: 'glob.include_hidden' must be a boolean "
+            f"at {manifest_entry_path(index, f'{FIELD_GLOB}.{FIELD_GLOB_INCLUDE_HIDDEN}')}."
+        )
+    return GlobOptions(recursive=recursive, include_hidden=include_hidden)
 
 
 def parse_markers(raw_entry: dict[str, Any], metadata: ManifestMetadata, index: int) -> Markers | None:
@@ -391,7 +535,6 @@ def build_entries(manifest_document: dict[str, Any], metadata: ManifestMetadata)
         raise ManifestError(f"Manifest must contain an array property '{metadata.entries_property}'.")
 
     entries: list[ManifestEntry] = []
-    fields = metadata.fields
     for raw_index, raw_entry in enumerate(raw_entries, start=1):
         if not isinstance(raw_entry, dict):
             raise ManifestError(
@@ -399,26 +542,53 @@ def build_entries(manifest_document: dict[str, Any], metadata: ManifestMetadata)
             )
 
         source_repo = normalize_source_repo(
-            require_string_property(raw_entry, fields["source_repo"], raw_index),
+            require_string_property(raw_entry, FIELD_SOURCE_REPO, raw_index),
             raw_index,
-            fields["source_repo"],
+            FIELD_SOURCE_REPO,
         )
-        source_ref = require_string_property(raw_entry, fields["source_ref"], raw_index)
-        source_path = normalize_repo_relative_path(
-            require_string_property(raw_entry, fields["source_path"], raw_index),
-            fields["source_path"],
-            raw_index,
-        )
-        target_path = normalize_repo_relative_path(
-            require_string_property(raw_entry, fields["target_path"], raw_index),
-            fields["target_path"],
-            raw_index,
+        source_ref = require_string_property(raw_entry, FIELD_SOURCE_REF, raw_index)
+        glob_options = parse_glob_options(raw_entry, raw_index) if FIELD_SOURCE_GLOB in raw_entry else None
+        source_path = None
+        source_glob = None
+        if FIELD_SOURCE_PATH in raw_entry:
+            source_path = normalize_repo_relative_file_path(
+                require_string_property(raw_entry, FIELD_SOURCE_PATH, raw_index),
+                FIELD_SOURCE_PATH,
+                raw_index,
+            )
+        if FIELD_SOURCE_GLOB in raw_entry:
+            source_glob = normalize_source_glob(
+                require_string_property(raw_entry, FIELD_SOURCE_GLOB, raw_index),
+                FIELD_SOURCE_GLOB,
+                raw_index,
+                recursive=(glob_options or GlobOptions()).recursive,
+            )
+
+        target_path = (
+            normalize_repo_relative_directory_path(
+                require_string_property(raw_entry, FIELD_TARGET_PATH, raw_index),
+                FIELD_TARGET_PATH,
+                raw_index,
+            )
+            if source_glob is not None
+            else normalize_repo_relative_file_path(
+                require_string_property(raw_entry, FIELD_TARGET_PATH, raw_index),
+                FIELD_TARGET_PATH,
+                raw_index,
+            )
         )
 
         manifest_properties = dict(raw_entry)
-        manifest_properties[fields["source_repo"]] = source_repo
-        manifest_properties[fields["source_path"]] = source_path
-        manifest_properties[fields["target_path"]] = target_path
+        manifest_properties[FIELD_SOURCE_REPO] = source_repo
+        if source_path is not None:
+            manifest_properties[FIELD_SOURCE_PATH] = source_path
+        if source_glob is not None:
+            manifest_properties[FIELD_SOURCE_GLOB] = source_glob
+            manifest_properties[FIELD_GLOB] = {
+                FIELD_GLOB_RECURSIVE: (glob_options or GlobOptions()).recursive,
+                FIELD_GLOB_INCLUDE_HIDDEN: (glob_options or GlobOptions()).include_hidden,
+            }
+        manifest_properties[FIELD_TARGET_PATH] = target_path
 
         entries.append(
             ManifestEntry(
@@ -426,11 +596,13 @@ def build_entries(manifest_document: dict[str, Any], metadata: ManifestMetadata)
                 source_repo=source_repo,
                 source_ref=source_ref,
                 source_path=source_path,
+                source_glob=source_glob,
+                glob=glob_options,
                 target_path=target_path,
-                direction=require_string_property(raw_entry, fields["direction"], raw_index),
-                lifecycle_policy=require_string_property(raw_entry, fields["lifecycle_policy"], raw_index),
-                uniqueness_policy=require_string_property(raw_entry, fields["uniqueness_policy"], raw_index),
-                managed_scope=require_string_property(raw_entry, fields["managed_scope"], raw_index),
+                direction=require_string_property(raw_entry, FIELD_DIRECTION, raw_index),
+                lifecycle_policy=require_string_property(raw_entry, FIELD_LIFECYCLE_POLICY, raw_index),
+                uniqueness_policy=require_string_property(raw_entry, FIELD_UNIQUENESS_POLICY, raw_index),
+                managed_scope=require_string_property(raw_entry, FIELD_MANAGED_SCOPE, raw_index),
                 markers=parse_markers(raw_entry, metadata, raw_index),
                 manifest_properties=manifest_properties,
             )
@@ -483,6 +655,8 @@ def enabled_rules(rules_config: dict[str, Any]) -> list[dict[str, Any]]:
 def run_unique_normalized_source_identity(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
     seen: dict[tuple[str, str, str], int] = {}
     for entry in entries:
+        if entry.is_glob_entry:
+            continue
         existing_index = seen.get(entry.source_identity_key)
         if existing_index is not None:
             raise ManifestError(
@@ -496,6 +670,8 @@ def run_unique_normalized_source_identity(entries: list[ManifestEntry], rule: di
 def run_unique_normalized_target_path(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
     seen: dict[str, int] = {}
     for entry in entries:
+        if entry.is_glob_entry:
+            continue
         existing_index = seen.get(entry.target_identity_key)
         if existing_index is not None:
             raise ManifestError(
@@ -508,6 +684,10 @@ def run_unique_normalized_target_path(entries: list[ManifestEntry], rule: dict[s
 
 def run_source_target_basename_must_match(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
     for entry in entries:
+        if entry.is_glob_entry:
+            continue
+        if entry.source_path is None:
+            raise ManifestError(f"{entry.describe()} must define source_path for exact-file basename validation.")
         if PurePosixPath(entry.source_path).name != PurePosixPath(entry.target_path).name:
             raise ManifestError(
                 f"{entry.describe()} has a basename mismatch between source_path '{entry.source_path}' "
@@ -518,13 +698,26 @@ def run_source_target_basename_must_match(entries: list[ManifestEntry], rule: di
 
 def run_repository_relative_safe_paths(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
     for entry in entries:
-        normalize_repo_relative_path(entry.source_path, "source_path", entry.index)
-        normalize_repo_relative_path(entry.target_path, "target_path", entry.index)
+        if entry.source_path is not None:
+            normalize_repo_relative_file_path(entry.source_path, FIELD_SOURCE_PATH, entry.index)
+            normalize_repo_relative_file_path(entry.target_path, FIELD_TARGET_PATH, entry.index)
+        elif entry.source_glob is not None:
+            normalize_source_glob(
+                entry.source_glob,
+                FIELD_SOURCE_GLOB,
+                entry.index,
+                recursive=(entry.glob or GlobOptions()).recursive,
+            )
+            normalize_repo_relative_directory_path(entry.target_path, FIELD_TARGET_PATH, entry.index)
 
 
 def run_file_like_paths_only(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
     for entry in entries:
+        if entry.is_glob_entry:
+            continue
         for field_name, path_value in (("source_path", entry.source_path), ("target_path", entry.target_path)):
+            if path_value is None:
+                continue
             if path_value.endswith("/") or PurePosixPath(path_value).name == "":
                 raise ManifestError(
                     f"{entry.describe()} uses {field_name} '{path_value}', but it must point to a file-like path "
@@ -562,7 +755,7 @@ def load_tracked_files(repo_root: Path) -> list[str]:
 
 
 def run_basename_unique_tracked_file_scan(entries: list[ManifestEntry], rule: dict[str, Any], repo_root: Path) -> None:
-    matching_entries = [entry for entry in entries if rule_applies_to_entry(rule, entry)]
+    matching_entries = [entry for entry in entries if rule_applies_to_entry(rule, entry) and not entry.is_glob_entry]
     if not matching_entries:
         return
 
@@ -643,10 +836,43 @@ def assert_safe_worktree_file_path(
         )
 
 
+def assert_safe_worktree_directory_path(
+    repo_root: Path,
+    target_path: Path,
+    target_label: str,
+    entry_description: str,
+) -> None:
+    resolved_root = repo_root.resolve(strict=True)
+    lexical_parent = repo_root
+    target_parts = PurePosixPath(target_label).parts
+
+    for path_part in target_parts:
+        lexical_parent = lexical_parent / path_part
+
+        if lexical_parent.is_symlink():
+            raise ManifestError(
+                f"{entry_description} cannot use target_path '{target_label}' because '{lexical_parent}' is a symlink."
+            )
+        if lexical_parent.exists() and not lexical_parent.is_dir():
+            raise ManifestError(
+                f"{entry_description} cannot use target_path '{target_label}' because '{lexical_parent}' is not a directory."
+            )
+
+    try:
+        target_path.resolve(strict=False).relative_to(resolved_root)
+    except ValueError as exc:
+        raise ManifestError(
+            f"{entry_description} points outside the checked-out repository: '{target_label}'."
+        ) from exc
+
+
 def run_worktree_target_path_safety(entries: list[ManifestEntry], rule: dict[str, Any], repo_root: Path) -> None:
     for entry in entries:
         target_path = target_abspath(repo_root, entry.target_path)
-        assert_safe_worktree_file_path(repo_root, target_path, entry.target_path, entry.describe())
+        if entry.is_glob_entry:
+            assert_safe_worktree_directory_path(repo_root, target_path, entry.target_path, entry.describe())
+        else:
+            assert_safe_worktree_file_path(repo_root, target_path, entry.target_path, entry.describe())
 
 
 def run_reject_matching_entries(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
@@ -731,6 +957,9 @@ def ensure_parent_directory(target_path: Path) -> None:
 
 
 def fetch_source_bytes(entry: ManifestEntry, source_token: str | None) -> bytes:
+    if entry.source_path is None:
+        raise SourceFetchError(f"{entry.describe()} cannot fetch source bytes without an expanded source_path.")
+
     encoded_path = urllib.parse.quote(entry.source_path, safe="/")
     encoded_ref = urllib.parse.quote(entry.source_ref, safe="")
     url = f"https://api.github.com/repos/{entry.source_repo}/contents/{encoded_path}?ref={encoded_ref}"

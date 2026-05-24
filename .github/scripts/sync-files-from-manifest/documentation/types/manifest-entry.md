@@ -1,6 +1,6 @@
 # ManifestEntry
 
-One strict source-to-target managed-file mapping.
+One source-to-target managed-file mapping. An entry selects either one exact source file with `source_path`, or a file set with `source_glob`.
 
 ## Shape
 
@@ -50,8 +50,10 @@ Marker-scoped entries include the conditional `markers` child object:
 |---|---:|---|---|
 | `source_repo` | Yes | string | Source repository in `owner/repository` form. |
 | `source_ref` | Yes | string | Source branch, tag, or commit SHA. |
-| `source_path` | Yes | [`RepoRelativeFilePath`](repo-relative-file-path.md) | Source file path inside the source repository. |
-| `target_path` | Yes | [`RepoRelativeFilePath`](repo-relative-file-path.md) | Target file path inside the caller repository. |
+| `source_path` | Conditional | [`RepoRelativeFilePath`](repo-relative-file-path.md) | Exact source file path. Required when `source_glob` is absent. Wildcards are not interpreted. |
+| `source_glob` | Conditional | [`SourceSelector`](source-selector.md) | Source file pattern. Required when `source_path` is absent. |
+| `target_path` | Yes | [`RepoRelativeFilePath`](repo-relative-file-path.md) | Target file path for `source_path`, or target directory root ending in `/` for `source_glob`. |
+| `glob` | No | [`SourceSelector`](source-selector.md) | Options for `source_glob`; forbidden for exact `source_path` entries. |
 | `direction` | Yes | [`Direction`](direction.md) | Synchronization direction. |
 | `lifecycle_policy` | Yes | [`LifecyclePolicy`](lifecycle-policy.md) | Missing/changed/existing target behavior. |
 | `uniqueness_policy` | Yes | [`UniquenessPolicy`](uniqueness-policy.md) | Optional basename uniqueness policy. |
@@ -63,12 +65,15 @@ Marker-scoped entries include the conditional `markers` child object:
 | Child Property | Child Type | Description |
 |---|---|---|
 | `markers` | [`Markers`](markers.md) | Conditional marker delimiter object for marker-scoped entries. |
+| `glob` | [`SourceSelector`](source-selector.md) | Optional glob options for `source_glob` entries. |
 
 ## Validation Rules
 
-- A normalized source identity is `source_repo + source_ref + source_path`.
-- A normalized source identity may appear only once.
-- A normalized `target_path` may appear only once.
-- `source_path` and `target_path` must have the same basename.
+- Exactly one of `source_path` or `source_glob` is required.
+- A normalized exact source identity is `source_repo + source_ref + source_path`.
+- A normalized exact source identity may appear only once.
+- A normalized exact or expanded `target_path` may appear only once.
+- Exact `source_path` and `target_path` values must have the same basename.
+- For `source_glob`, `target_path` is a directory root and basename validation applies after expansion.
 - No implicit rename semantics are supported.
 - Unknown entry properties are rejected.
