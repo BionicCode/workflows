@@ -11,7 +11,7 @@ SCRIPT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import sync_files  # noqa: E402
-from common import ManifestEntry, ManifestError, Markers, write_normalized_manifest  # noqa: E402
+from common import ManifestEntry, ManifestError, Markers, SourceFetchError, write_normalized_manifest  # noqa: E402
 from marker_scope import compose_marker_scoped_bytes, parse_marker_bytes  # noqa: E402
 
 
@@ -263,24 +263,40 @@ class MarkerScopeCompositionTests(unittest.TestCase):
 class MarkerScopeSyncLifecycleTests(unittest.TestCase):
     def setUp(self) -> None:
         self._original_fetch = sync_files.fetch_source_bytes
+        self._original_atomic_write = sync_files.write_file_bytes_atomically
+        self._original_replace = sync_files.os.replace
 
     def tearDown(self) -> None:
         sync_files.fetch_source_bytes = self._original_fetch
+        sync_files.write_file_bytes_atomically = self._original_atomic_write
+        sync_files.os.replace = self._original_replace
         os.environ.pop("GITHUB_OUTPUT", None)
 
-    def write_manifest(self, root: Path, entry: ManifestEntry) -> Path:
+    def write_manifest(self, root: Path, entry: ManifestEntry | list[ManifestEntry]) -> Path:
         manifest_path = root / "normalized.json"
-        write_normalized_manifest([entry], manifest_path)
+        entries = entry if isinstance(entry, list) else [entry]
+        write_normalized_manifest(entries, manifest_path)
         return manifest_path
 
     def stub_source(self, content: bytes) -> None:
         sync_files.fetch_source_bytes = lambda entry, source_token: content
+
+    def stub_sources(self, sources_by_target_path: dict[str, bytes]) -> None:
+        sync_files.fetch_source_bytes = lambda entry, source_token: sources_by_target_path[entry.target_path]
 
     def fail_if_fetched(self) -> None:
         def raise_fetch(entry: ManifestEntry, source_token: str | None) -> bytes:
             raise AssertionError("source fetch should not be called")
 
         sync_files.fetch_source_bytes = raise_fetch
+
+    def assert_no_success_outputs(self, output_path: Path) -> None:
+        if output_path.exists():
+            output = output_path.read_text(encoding="utf-8")
+            self.assertNotIn("changed=", output)
+            self.assertNotIn("changed_count=", output)
+            self.assertNotIn("changed_paths", output)
+            self.assertNotIn("pull_request_body", output)
 
     def test_seed_once_existing_marker_target_is_not_overwritten_or_fetched(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -411,6 +427,135 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             sync_files.sync_entries(root, manifest_path, None)
 
             self.assertEqual(target.read_bytes(), b"source")
+
+    def test_planning_marker_failure_writes_nothing_and_emits_no_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first_entry = make_entry("whole_file", target_path="first.txt")
+            second_entry = make_entry("inside_markers", target_path="second.md")
+            first_target = root / first_entry.target_path
+            second_target = root / second_entry.target_path
+            first_target.write_bytes(b"old first")
+            second_target.write_bytes(as_bytes(f"target {START}old{END} tail"))
+            manifest_path = self.write_manifest(root, [first_entry, second_entry])
+            output_path = root / "github-output.txt"
+            os.environ["GITHUB_OUTPUT"] = str(output_path)
+            self.stub_sources(
+                {
+                    first_entry.target_path: b"new first",
+                    second_entry.target_path: b"source without markers",
+                }
+            )
+
+            with self.assertRaisesRegex(ManifestError, "found no exact marker blocks"):
+                sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertEqual(first_target.read_bytes(), b"old first")
+            self.assertEqual(second_target.read_bytes(), as_bytes(f"target {START}old{END} tail"))
+            self.assert_no_success_outputs(output_path)
+
+    def test_planning_source_fetch_failure_writes_nothing_and_emits_no_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first_entry = make_entry("whole_file", target_path="first.txt")
+            second_entry = make_entry("whole_file", target_path="second.txt")
+            first_target = root / first_entry.target_path
+            second_target = root / second_entry.target_path
+            first_target.write_bytes(b"old first")
+            second_target.write_bytes(b"old second")
+            manifest_path = self.write_manifest(root, [first_entry, second_entry])
+            output_path = root / "github-output.txt"
+            os.environ["GITHUB_OUTPUT"] = str(output_path)
+
+            def fetch_or_fail(entry: ManifestEntry, source_token: str | None) -> bytes:
+                if entry.target_path == first_entry.target_path:
+                    return b"new first"
+                raise SourceFetchError("source fetch failed")
+
+            sync_files.fetch_source_bytes = fetch_or_fail
+
+            with self.assertRaisesRegex(SourceFetchError, "source fetch failed"):
+                sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertEqual(first_target.read_bytes(), b"old first")
+            self.assertEqual(second_target.read_bytes(), b"old second")
+            self.assert_no_success_outputs(output_path)
+
+    def test_planning_failure_does_not_create_missing_nested_target_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first_entry = make_entry("whole_file", target_path="nested/first.txt")
+            second_entry = make_entry("inside_markers", target_path="second.md")
+            second_target = root / second_entry.target_path
+            second_target.write_bytes(as_bytes(f"target {START}old{END} tail"))
+            manifest_path = self.write_manifest(root, [first_entry, second_entry])
+            self.stub_sources(
+                {
+                    first_entry.target_path: b"new first",
+                    second_entry.target_path: b"source without markers",
+                }
+            )
+
+            with self.assertRaisesRegex(ManifestError, "found no exact marker blocks"):
+                sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertFalse((root / "nested").exists())
+            self.assertEqual(second_target.read_bytes(), as_bytes(f"target {START}old{END} tail"))
+
+    def test_commit_failure_emits_no_success_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("whole_file", target_path="managed.txt")
+            target = root / entry.target_path
+            target.write_bytes(b"old")
+            manifest_path = self.write_manifest(root, entry)
+            output_path = root / "github-output.txt"
+            os.environ["GITHUB_OUTPUT"] = str(output_path)
+            self.stub_source(b"new")
+
+            def fail_replace(source: str, destination: str) -> None:
+                raise OSError("replace failed")
+
+            sync_files.os.replace = fail_replace
+
+            with self.assertRaisesRegex(ManifestError, "Unable to write target file"):
+                sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertEqual(target.read_bytes(), b"old")
+            self.assert_no_success_outputs(output_path)
+            self.assertEqual(list(root.glob(".managed.txt.*.tmp")), [])
+
+    def test_successful_multi_entry_sync_writes_all_changes_then_emits_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first_entry = make_entry("whole_file", target_path="first.txt")
+            second_entry = make_entry("whole_file", target_path="second.txt")
+            third_entry = make_entry("whole_file", target_path="third.txt")
+            (root / first_entry.target_path).write_bytes(b"old first")
+            (root / second_entry.target_path).write_bytes(b"same second")
+            (root / third_entry.target_path).write_bytes(b"old third")
+            manifest_path = self.write_manifest(root, [first_entry, second_entry, third_entry])
+            output_path = root / "github-output.txt"
+            os.environ["GITHUB_OUTPUT"] = str(output_path)
+            self.stub_sources(
+                {
+                    first_entry.target_path: b"new first",
+                    second_entry.target_path: b"same second",
+                    third_entry.target_path: b"new third",
+                }
+            )
+
+            sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertEqual((root / first_entry.target_path).read_bytes(), b"new first")
+            self.assertEqual((root / second_entry.target_path).read_bytes(), b"same second")
+            self.assertEqual((root / third_entry.target_path).read_bytes(), b"new third")
+            output = output_path.read_text(encoding="utf-8")
+            self.assertIn("changed=true", output)
+            self.assertIn("changed_count=2", output)
+            self.assertIn("first.txt", output)
+            self.assertIn("third.txt", output)
+            self.assertNotIn("second.txt", output)
 
     def test_enforce_inside_missing_target_fails_on_pr_verification(self) -> None:
         self.assert_missing_marker_target_fails_on_verify("inside_markers")

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from common import (
@@ -16,7 +18,6 @@ from common import (
     log_info,
     read_file_bytes,
     target_abspath,
-    write_file_bytes,
 )
 from marker_scope import (
     compose_marker_scoped_bytes,
@@ -29,6 +30,13 @@ LIFECYCLE_DISABLED = "disabled"
 LIFECYCLE_ENFORCE = "enforce"
 LIFECYCLE_SEED_ONCE = "seed_once"
 MANAGED_SCOPE_WHOLE_FILE = "whole_file"
+
+
+@dataclass(frozen=True)
+class PlannedWrite:
+    entry: ManifestEntry
+    target_path: Path
+    expected_bytes: bytes
 
 
 def parse_args() -> argparse.Namespace:
@@ -143,41 +151,83 @@ def build_pr_body(changed_entries: list[ManifestEntry]) -> str:
     return "\n".join(lines)
 
 
+def plan_sync_entry(repo_root: Path, entry: ManifestEntry, source_token: str | None) -> PlannedWrite | None:
+    log_info(f"Planning synchronization for {entry.describe()}.")
+    assert_supported_scope(entry)
+
+    target_path = target_abspath(repo_root, entry.target_path)
+    assert_safe_worktree_file_path(repo_root, target_path, entry.target_path, entry.describe())
+
+    if entry.lifecycle_policy == LIFECYCLE_DISABLED:
+        log_info(f"Skipping {entry.describe()} because lifecycle_policy is disabled.")
+        return None
+
+    if entry.lifecycle_policy == LIFECYCLE_SEED_ONCE and target_path.is_file():
+        log_info(f"Leaving existing seed_once target unchanged for {entry.describe()}.")
+        return None
+
+    if entry.lifecycle_policy not in {LIFECYCLE_ENFORCE, LIFECYCLE_SEED_ONCE}:
+        raise ManifestError(f"{entry.describe()} uses unsupported lifecycle policy '{entry.lifecycle_policy}'.")
+
+    source_bytes = fetch_source_bytes(entry, source_token)
+    current_bytes = read_file_bytes(target_path) if target_path.is_file() else None
+    expected_bytes = expected_sync_bytes(entry, source_bytes, current_bytes)
+
+    if current_bytes == expected_bytes:
+        log_info(f"Target already matches canonical source for {entry.describe()}.")
+        return None
+
+    return PlannedWrite(entry=entry, target_path=target_path, expected_bytes=expected_bytes)
+
+
+def write_file_bytes_atomically(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            delete=False,
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+        ) as handle:
+            temp_path = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+
+        os.replace(temp_path, path)
+        temp_path = None
+    except OSError as exc:
+        raise ManifestError(f"Unable to write target file '{path}': {exc}.") from exc
+    finally:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def commit_planned_writes(planned_writes: list[PlannedWrite]) -> None:
+    for planned_write in planned_writes:
+        write_file_bytes_atomically(planned_write.target_path, planned_write.expected_bytes)
+        log_info(f"Updated target '{planned_write.entry.target_path}' for {planned_write.entry.describe()}.")
+
+
 def sync_entries(repo_root: Path, normalized_manifest_path: Path, source_token: str | None) -> None:
     entries = load_normalized_manifest(normalized_manifest_path)
-    changed_entries: list[ManifestEntry] = []
-    changed_paths: list[str] = []
+    planned_writes: list[PlannedWrite] = []
 
     for entry in entries:
-        log_info(f"Synchronizing {entry.describe()}.")
-        assert_supported_scope(entry)
+        planned_write = plan_sync_entry(repo_root, entry, source_token)
+        if planned_write is not None:
+            planned_writes.append(planned_write)
 
-        target_path = target_abspath(repo_root, entry.target_path)
-        assert_safe_worktree_file_path(repo_root, target_path, entry.target_path, entry.describe())
+    commit_planned_writes(planned_writes)
 
-        if entry.lifecycle_policy == LIFECYCLE_DISABLED:
-            log_info(f"Skipping {entry.describe()} because lifecycle_policy is disabled.")
-            continue
-
-        if entry.lifecycle_policy == LIFECYCLE_SEED_ONCE and target_path.is_file():
-            log_info(f"Leaving existing seed_once target unchanged for {entry.describe()}.")
-            continue
-
-        if entry.lifecycle_policy not in {LIFECYCLE_ENFORCE, LIFECYCLE_SEED_ONCE}:
-            raise ManifestError(f"{entry.describe()} uses unsupported lifecycle policy '{entry.lifecycle_policy}'.")
-
-        source_bytes = fetch_source_bytes(entry, source_token)
-        current_bytes = read_file_bytes(target_path) if target_path.is_file() else None
-        expected_bytes = expected_sync_bytes(entry, source_bytes, current_bytes)
-
-        if current_bytes == expected_bytes:
-            log_info(f"Target already matches canonical source for {entry.describe()}.")
-            continue
-
-        write_file_bytes(target_path, expected_bytes)
-        changed_entries.append(entry)
-        changed_paths.append(entry.target_path)
-        log_info(f"Updated target '{entry.target_path}' for {entry.describe()}.")
+    changed_entries = [planned_write.entry for planned_write in planned_writes]
+    changed_paths = [planned_write.entry.target_path for planned_write in planned_writes]
 
     emit_output("changed", "true" if changed_paths else "false")
     emit_output("changed_count", str(len(changed_paths)))
