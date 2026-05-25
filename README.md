@@ -193,18 +193,22 @@ Example recursive documentation sync:
 
 `whole_file` is byte-for-byte behavior and is suitable for binary files when GitHub source-fetch behavior supports them.
 
-Marker-scoped entries are strict UTF-8 text-file behavior. Marker delimiters are exact substring matches; they are not regular expressions and are not trimmed, case-folded, or whitespace-normalized.
+Marker-aware scopes inspect the source bytes before UTF-8 parsing. If the source contains neither exact UTF-8 encoded start delimiter bytes nor exact UTF-8 encoded end delimiter bytes, no source-defined extension points exist and the entry behaves as byte-level `whole_file`. Target-added fences are ordinary bytes and never create edit permissions.
+
+If the source contains either delimiter byte sequence, marker-aware mode is strict UTF-8 text-file behavior. Marker delimiters are exact substring matches; they are not regular expressions and are not trimmed, case-folded, or whitespace-normalized. If a binary or non-UTF-8 source file happens to contain one of the configured marker delimiter byte sequences, strict UTF-8 marker parsing applies.
 
 `outside_markers`:
 
 - Source-side marker blocks define target-owned extension points.
 - If the target has the same number of exact marker blocks as the source, target inner content is preserved by occurrence order.
 - If the target has zero exact marker blocks, the target must equal the source-owned outside projection; partial or extra target marker blocks fail.
+- If the source has no exact marker delimiter byte sequences, this behaves as byte-level `whole_file`.
 
 `inside_markers`:
 
 - The target must contain the same exact marker count as the source, matched by occurrence order.
 - Source inner content is enforced into occurrence-matched target blocks.
+- If the source has no exact marker delimiter byte sequences, this behaves as byte-level `whole_file`; the whole target is not treated as target-owned.
 - The workflow does not use fuzzy diff, LCS, `difflib`, or heuristic moved-block detection. Stronger same-source-context detection requires future marker IDs, named anchors, or source-owned outside context anchors.
 
 ### Validation And Planning Model

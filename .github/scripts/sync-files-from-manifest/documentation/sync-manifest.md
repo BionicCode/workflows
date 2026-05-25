@@ -244,6 +244,8 @@ Source placeholder:
 
 Do not append annotations inside a marker delimiter unless the manifest marker string includes that annotation exactly. If no target-owned section is desired, use `whole_file` instead of marker scope.
 
+Source marker blocks define target-owned extension points. If the source contains neither exact UTF-8 encoded start delimiter bytes nor exact UTF-8 encoded end delimiter bytes, no extension points exist and marker-aware scopes behave as byte-level `whole_file`. Target-added fences never create edit permissions. If a binary or non-UTF-8 source file happens to contain one of the configured marker delimiter byte sequences, marker-aware mode is entered and strict UTF-8 marker parsing applies.
+
 ## Current Execution Rules
 
 Supported now:

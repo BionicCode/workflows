@@ -50,6 +50,32 @@ def is_marker_scope(entry: ManifestEntry) -> bool:
     return entry.managed_scope in {MANAGED_SCOPE_INSIDE_MARKERS, MANAGED_SCOPE_OUTSIDE_MARKERS}
 
 
+def marker_delimiter_bytes(entry: ManifestEntry) -> tuple[bytes, bytes]:
+    start_marker, end_marker = _require_markers(entry)
+    try:
+        start_bytes = start_marker.encode(encoding="utf-8", errors="strict")
+        end_bytes = end_marker.encode(encoding="utf-8", errors="strict")
+    except UnicodeEncodeError as exc:
+        raise ManifestError(
+            f"{entry.describe()} cannot encode marker delimiters for target_path '{entry.target_path}' "
+            f"as strict UTF-8 before marker byte dispatch: {exc}."
+        ) from exc
+    if not start_bytes or not end_bytes:
+        raise ManifestError(
+            f"{entry.describe()} marker delimiters for target_path '{entry.target_path}' "
+            "must encode to non-empty UTF-8 byte sequences before marker byte dispatch."
+        )
+    return start_bytes, end_bytes
+
+
+def source_uses_effective_whole_file(source_bytes: bytes, entry: ManifestEntry) -> bool:
+    if not is_marker_scope(entry):
+        return False
+
+    start_bytes, end_bytes = marker_delimiter_bytes(entry)
+    return start_bytes not in source_bytes and end_bytes not in source_bytes
+
+
 def text_location(text: str, offset: int) -> TextLocation:
     """Return 1-based line/column for a decoded-text character offset.
 
@@ -133,6 +159,11 @@ def _marker_error(
 def _require_markers(entry: ManifestEntry) -> tuple[str, str]:
     if entry.markers is None:
         raise ManifestError(f"{entry.describe()} requires markers for managed_scope '{entry.managed_scope}'.")
+    if entry.markers.start == "" or entry.markers.end == "":
+        raise ManifestError(
+            f"{entry.describe()} marker delimiters for target_path '{entry.target_path}' "
+            "must encode to non-empty UTF-8 byte sequences before marker parsing."
+        )
     return entry.markers.start, entry.markers.end
 
 
@@ -263,6 +294,8 @@ def parse_marker_bytes(
 
 
 def validate_source_marker_blocks(source_bytes: bytes, entry: ManifestEntry) -> None:
+    if source_uses_effective_whole_file(source_bytes, entry):
+        return
     parse_marker_bytes(source_bytes, entry, "source")
 
 
@@ -335,6 +368,9 @@ def compose_marker_scoped_text(
 
 
 def compose_marker_scoped_bytes(source_bytes: bytes, target_bytes: bytes, entry: ManifestEntry) -> bytes:
+    if source_uses_effective_whole_file(source_bytes, entry):
+        return source_bytes
+
     source = parse_marker_bytes(source_bytes, entry, "source")
     target = parse_marker_bytes(
         target_bytes,

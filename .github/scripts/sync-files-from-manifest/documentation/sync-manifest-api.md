@@ -16,6 +16,8 @@ This is the public manifest API for `sync-files-from-manifest.yml`.
 | `two_way` | Yes | No | Rejected by current execution rules. |
 | Delete unmatched targets | No | No | Future delete policy required. |
 
+Marker-aware scopes behave as byte-level `whole_file` when the source contains neither exact UTF-8 encoded start delimiter bytes nor exact UTF-8 encoded end delimiter bytes. If the source contains either delimiter byte sequence, strict UTF-8 marker parsing and marker-scope rules apply.
+
 ## Type Index
 
 | Type | Placement | Summary |
@@ -96,8 +98,8 @@ Verify/sync planning can reject:
 - source tree response was truncated
 - duplicate generated computed targets
 - source fetch failure
-- marker parse failure in an expanded file
-- marker-scoped UTF-8 decode failure
+- marker parse failure in an expanded file when the source contains at least one configured marker delimiter byte sequence
+- marker-scoped UTF-8 decode failure when marker-aware mode is entered
 - reserved or unsafe computed target paths
 
 `validate` is local-only. Remote expansion, zero-match detection, generated duplicate detection, source tree truncation, source fetching, marker parsing, and write planning happen during PR verification or branch/default maintenance sync before writes.

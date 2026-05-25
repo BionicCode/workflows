@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import shutil
 import subprocess
@@ -7,6 +9,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+from dataclasses import replace
 from pathlib import Path
 
 
@@ -36,7 +39,12 @@ from common import (  # noqa: E402
     validate_manifest_schema,
     write_normalized_manifest,
 )
-from marker_scope import compose_marker_scoped_bytes, parse_marker_bytes, text_location  # noqa: E402
+from marker_scope import (  # noqa: E402
+    compose_marker_scoped_bytes,
+    parse_marker_bytes,
+    source_uses_effective_whole_file,
+    text_location,
+)
 from source_glob import (  # noqa: E402
     expand_source_glob_entry,
     path_matches_glob,
@@ -641,6 +649,48 @@ class MarkerScopeCompositionTests(unittest.TestCase):
 
         self.assertEqual(result, as_bytes("beforeafter"))
 
+    def test_zero_source_delimiters_use_effective_whole_file_for_outside_markers(self) -> None:
+        entry = make_entry("outside_markers")
+        source = b"canonical source bytes"
+        target = as_bytes(f"target-added {START}local{END} bytes")
+
+        result = compose_marker_scoped_bytes(source, target, entry)
+
+        self.assertEqual(result, source)
+
+    def test_zero_source_delimiters_use_effective_whole_file_for_inside_markers(self) -> None:
+        entry = make_entry("inside_markers")
+        source = b"canonical source bytes"
+        target = b"target-owned-looking local bytes"
+
+        result = compose_marker_scoped_bytes(source, target, entry)
+
+        self.assertEqual(result, source)
+
+    def test_zero_source_delimiters_do_not_decode_invalid_utf8(self) -> None:
+        entry = make_entry("inside_markers")
+        source = b"\xff\xfe canonical"
+        target = b"\xff\xfe target drift"
+
+        result = compose_marker_scoped_bytes(source, target, entry)
+
+        self.assertEqual(result, source)
+
+    def test_source_with_either_delimiter_enters_marker_parser(self) -> None:
+        entry = make_entry("outside_markers")
+
+        with self.assertRaisesRegex(ManifestError, "start marker without a matching end marker"):
+            compose_marker_scoped_bytes(as_bytes(f"source {START} without end"), b"target", entry)
+
+        with self.assertRaisesRegex(ManifestError, "end marker before a matching start marker"):
+            compose_marker_scoped_bytes(as_bytes(f"source {END} without start"), b"target", entry)
+
+    def test_empty_encoded_marker_delimiters_fail_before_byte_search(self) -> None:
+        entry = replace(make_entry("inside_markers"), markers=Markers(start="", end=END))
+
+        with self.assertRaisesRegex(ManifestError, "non-empty UTF-8 byte sequences"):
+            source_uses_effective_whole_file(b"plain source", entry)
+
     def test_multiple_inside_marker_blocks_match_by_occurrence_order(self) -> None:
         entry = make_entry("inside_markers")
         source = f"A{START}s1{END}B{START}s2{END}C"
@@ -1034,6 +1084,106 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             sync_files.sync_entries(root, manifest_path, None)
             self.assertEqual(target.read_bytes(), as_bytes("source  source-tail"))
 
+    def test_outside_markers_zero_source_delimiters_identical_target_verifies_as_whole_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("outside_markers")
+            target = root / entry.target_path
+            source_bytes = b"canonical bytes without configured delimiters"
+            target.write_bytes(source_bytes)
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(source_bytes)
+
+            log_buffer = io.StringIO()
+            with contextlib.redirect_stdout(log_buffer):
+                sync_files.verify_entries(root, manifest_path, None)
+                sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertEqual(target.read_bytes(), source_bytes)
+            self.assertIn("Treating the file as effective whole_file", log_buffer.getvalue())
+
+    def test_outside_markers_zero_source_delimiters_target_fences_are_whole_file_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("outside_markers")
+            target = root / entry.target_path
+            source_bytes = b"canonical bytes"
+            target.write_bytes(as_bytes(f"canonical bytes {START}target-owned-looking{END}"))
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(source_bytes)
+
+            with self.assertRaisesRegex(ManifestError, "out of sync"):
+                sync_files.verify_entries(root, manifest_path, None)
+
+            sync_files.sync_entries(root, manifest_path, None)
+            self.assertEqual(target.read_bytes(), source_bytes)
+
+    def test_inside_markers_zero_source_delimiters_identical_target_verifies_as_whole_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("inside_markers")
+            target = root / entry.target_path
+            source_bytes = b"canonical bytes without configured delimiters"
+            target.write_bytes(source_bytes)
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(source_bytes)
+
+            sync_files.verify_entries(root, manifest_path, None)
+            sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertEqual(target.read_bytes(), source_bytes)
+
+    def test_inside_markers_zero_source_delimiters_arbitrary_target_content_is_whole_file_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("inside_markers")
+            target = root / entry.target_path
+            source_bytes = b"canonical bytes"
+            target.write_bytes(b"canonical bytes plus target-owned-looking content")
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(source_bytes)
+
+            with self.assertRaisesRegex(ManifestError, "out of sync"):
+                sync_files.verify_entries(root, manifest_path, None)
+
+            sync_files.sync_entries(root, manifest_path, None)
+            self.assertEqual(target.read_bytes(), source_bytes)
+
+    def test_zero_source_delimiters_invalid_utf8_identical_target_verifies_as_byte_whole_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("inside_markers")
+            target = root / entry.target_path
+            source_bytes = b"\xff\xfe canonical binary-ish bytes"
+            target.write_bytes(source_bytes)
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(source_bytes)
+
+            sync_files.verify_entries(root, manifest_path, None)
+            sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertEqual(target.read_bytes(), source_bytes)
+
+    def test_zero_source_delimiters_invalid_utf8_target_drift_is_byte_drift_not_decode_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = make_entry("outside_markers")
+            target = root / entry.target_path
+            source_bytes = b"\xff\xfe canonical binary-ish bytes"
+            target.write_bytes(b"\xff\xfd target binary-ish drift")
+            manifest_path = self.write_manifest(root, entry)
+            self.stub_source(source_bytes)
+
+            with self.assertRaises(ManifestError) as context:
+                sync_files.verify_entries(root, manifest_path, None)
+
+            message = str(context.exception)
+            self.assertIn("out of sync", message)
+            self.assertNotIn("decode", message)
+
+            sync_files.sync_entries(root, manifest_path, None)
+            self.assertEqual(target.read_bytes(), source_bytes)
+
     def test_whole_file_behavior_remains_byte_for_byte(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1062,11 +1212,11 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             self.stub_sources(
                 {
                     first_entry.target_path: b"new first",
-                    second_entry.target_path: b"source without markers",
+                    second_entry.target_path: as_bytes(f"source {START}without end"),
                 }
             )
 
-            with self.assertRaisesRegex(ManifestError, "found no exact marker blocks"):
+            with self.assertRaisesRegex(ManifestError, "start marker without a matching end marker"):
                 sync_files.sync_entries(root, manifest_path, None)
 
             self.assertEqual(first_target.read_bytes(), b"old first")
@@ -1111,11 +1261,11 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             self.stub_sources(
                 {
                     first_entry.target_path: b"new first",
-                    second_entry.target_path: b"source without markers",
+                    second_entry.target_path: as_bytes(f"source {START}without end"),
                 }
             )
 
-            with self.assertRaisesRegex(ManifestError, "found no exact marker blocks"):
+            with self.assertRaisesRegex(ManifestError, "start marker without a matching end marker"):
                 sync_files.sync_entries(root, manifest_path, None)
 
             self.assertFalse((root / "nested").exists())
@@ -1558,11 +1708,11 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             self.stub_sources_by_source_path(
                 {
                     "docs/first.md": as_bytes(f"source {START}new{END}"),
-                    "docs/second.md": b"source without markers",
+                    "docs/second.md": as_bytes(f"source {START}without end"),
                 }
             )
 
-            with self.assertRaisesRegex(ManifestError, "found no exact marker blocks"):
+            with self.assertRaisesRegex(ManifestError, "start marker without a matching end marker"):
                 sync_files.sync_entries(root, manifest_path, None)
 
             self.assertEqual(first_target.read_bytes(), as_bytes(f"target {START}old{END}"))
@@ -1577,11 +1727,11 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             self.stub_sources_by_source_path(
                 {
                     "docs/types/first.md": as_bytes(f"source {START}new{END}"),
-                    "docs/types/second.md": b"source without markers",
+                    "docs/types/second.md": as_bytes(f"source {START}without end"),
                 }
             )
 
-            with self.assertRaisesRegex(ManifestError, "found no exact marker blocks"):
+            with self.assertRaisesRegex(ManifestError, "start marker without a matching end marker"):
                 sync_files.sync_entries(root, manifest_path, None)
 
             self.assertFalse((root / "out").exists())

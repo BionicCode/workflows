@@ -23,6 +23,7 @@ from common import (
 from marker_scope import (
     compose_marker_scoped_bytes,
     is_marker_scope,
+    source_uses_effective_whole_file,
     text_location,
     validate_source_marker_blocks,
 )
@@ -65,6 +66,14 @@ def is_whole_file_scope(entry: ManifestEntry) -> bool:
 def assert_supported_scope(entry: ManifestEntry) -> None:
     if not is_whole_file_scope(entry) and not is_marker_scope(entry):
         raise ManifestError(f"{entry.describe()} uses unsupported managed_scope '{entry.managed_scope}'.")
+
+
+def log_effective_whole_file_scope(entry: ManifestEntry) -> None:
+    log_info(
+        f"Manifest entry {entry.index} uses managed_scope={entry.managed_scope}, but the source file "
+        "defines no marker blocks. Treating the file as effective whole_file because the source "
+        "declares no target-owned regions."
+    )
 
 
 def first_differing_byte_offset(left: bytes, right: bytes) -> int | None:
@@ -111,11 +120,7 @@ def verify_enforced_entry(
 
     source_bytes = fetch_source_bytes(entry, source_token)
     target_bytes = read_file_bytes(target_path)
-    expected_bytes = (
-        source_bytes
-        if is_whole_file_scope(entry)
-        else compose_marker_scoped_bytes(source_bytes, target_bytes, entry)
-    )
+    expected_bytes = expected_sync_bytes(entry, source_bytes, target_bytes)
 
     if target_bytes != expected_bytes:
         raise ManifestError(
@@ -133,6 +138,10 @@ def expected_sync_bytes(
     current_bytes: bytes | None,
 ) -> bytes:
     if is_whole_file_scope(entry):
+        return source_bytes
+
+    if source_uses_effective_whole_file(source_bytes, entry):
+        log_effective_whole_file_scope(entry)
         return source_bytes
 
     if current_bytes is None:
