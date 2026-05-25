@@ -22,14 +22,7 @@ Using `@main` is acceptable during development and early testing. After release,
 
 ## Managed-File Sync Ownership
 
-`BionicCode/workflows` owns the reusable managed-file sync engine:
-
-- `.github/workflows/sync-files-from-manifest.yml`
-- `.github/scripts/sync-files-from-manifest/schema/sync-manifest.schema.json`
-- `.github/scripts/sync-files-from-manifest/schema/sync-rules.json`
-- `.github/scripts/sync-files-from-manifest/templates/sync-manifest.template.json`
-- `.github/scripts/sync-files-from-manifest/documentation/`
-- `.github/scripts/sync-files-from-manifest/*.py`
+`BionicCode/workflows` owns the reusable managed-file sync engine, bundled schema, semantic rules, starter manifest, script implementation, and copied reference documentation.
 
 Each caller repository owns its manifest at:
 
@@ -37,9 +30,9 @@ Each caller repository owns its manifest at:
 .github/sync-config/sync-manifest.json
 ```
 
-The schema copied to caller repositories at `.github/sync-config/sync-manifest.schema.json` is for editor tooling, documentation, and human guidance. Authoritative validation always uses the schema bundled with the exact reusable workflow version being executed.
+The schema copied to caller repositories at `.github/sync-config/sync-manifest.schema.json` is for editor tooling, documentation, and human guidance. Authoritative validation always uses the schema bundled with the reusable workflow version being executed.
 
-`template-visual-studio-repository` owns the real default manifest for Visual Studio template descendants. New repositories created from that GitHub template inherit the caller workflow and manifest naturally, and may customize the manifest later.
+`VisualStudioGitHubTemplate` copied schema/docs/manifest content must be migrated separately after this contract change; this repository change does not modify that template repository.
 
 ## Sync Files From Manifest
 
@@ -76,11 +69,13 @@ Secrets:
 
 Caller jobs that invoke `init` or `sync` should grant `contents: write` and `pull-requests: write`. The reusable workflow narrows permissions at job level: PR verification uses `contents: read`; init and branch sync PR creation use `contents: write` and `pull-requests: write`.
 
+No workflow-call inputs changed for `target_directory` or `source_glob`; both are manifest fields.
+
 ### Commands
 
-- `init` copies or updates `.github/sync-config/sync-manifest.schema.json`, creates `.github/sync-config/sync-manifest.json` only when missing, opens or updates one initialization PR, and then stops. It does not fetch source files or sync managed files.
-- `validate` validates `manifest_json` against the bundled JSON Schema, runs semantic rules from `sync-rules.json`, writes a normalized manifest for diagnostics, and performs no fetch/write behavior.
-- `sync` validates first, writes the normalized manifest, and then verifies PRs or creates/updates one aggregated sync PR on branch events.
+- `init` copies or updates `.github/sync-config/sync-manifest.schema.json`, copies documentation, creates `.github/sync-config/sync-manifest.json` only when missing, opens or updates one initialization PR, and stops without source fetch or sync.
+- `validate` validates `manifest_json` against the bundled JSON Schema and local semantic rules only. It does not enumerate remote trees, fetch sources, parse marker content, or write files.
+- `sync` validates first, writes the normalized manifest, expands remote globs during planning, and then verifies PRs or creates/updates one aggregated sync PR on branch events.
 
 ### Manifest Shape
 
@@ -95,7 +90,7 @@ Object-shaped manifests are the only supported shape:
       "source_repo": "BionicCode/template-visual-studio-repository",
       "source_ref": "main",
       "source_path": "README.md",
-      "target_path": "README.md",
+      "target_directory": "",
       "direction": "source_to_target",
       "lifecycle_policy": "seed_once",
       "uniqueness_policy": "none",
@@ -107,54 +102,61 @@ Object-shaped manifests are the only supported shape:
 
 Old top-level array manifests are intentionally rejected. Wrap the array under `entries` and add `schema_version`.
 
-Each entry supports:
+### Path Naming Rules
 
-- `source_repo`
-- `source_ref`
-- exactly one of `source_path` or `source_glob`
-- `target_path`
-- optional `glob` settings for `source_glob`
-- `direction`
-- `lifecycle_policy`
-- `uniqueness_policy`
-- `managed_scope`
-- `markers` only when required by marker-scoped managed scopes
+Manifest paths are logical repository-relative POSIX paths. They always use `/` and are never repaired with host OS normalization.
 
-The current version executes:
+`source_path`:
 
-- `direction: source_to_target`
-- `lifecycle_policy: enforce`, `seed_once`, `disabled`
-- `uniqueness_policy: basename_unique`, `none`
-- `managed_scope: whole_file`, `outside_markers`, `inside_markers`
+- Selects exactly one source file.
+- Must be non-empty, repository-relative, and file-like.
+- Must not end with `/`.
+- Must not contain wildcards. Use `source_glob` for patterns.
 
-Managed scopes:
+`source_glob`:
 
-| Scope | Runtime support | Intended content |
-|---|---:|---|
-| `whole_file` | Yes | Byte-for-byte source-to-target sync. Suitable for text files and binary files that can be fetched through the GitHub source API. |
-| `outside_markers` | Yes | Source owns content outside source-defined marker blocks. Target owns content inside those blocks. Marker-scoped sync is strict UTF-8 text-file behavior. |
-| `inside_markers` | Yes | Source owns content inside marker blocks. Target owns outside content. Marker-scoped sync is strict UTF-8 text-file behavior. |
+- Selects many source files and must contain at least one glob metacharacter: `*`, `?`, or `[`.
+- Must be non-empty, repository-relative, and use forward slashes.
+- `**` is valid only as a complete path segment and only with `glob.recursive: true`.
+- `*`, `?`, and character classes match within one path segment.
 
-Marker delimiters are exact substring matches. They are not regular expressions and are not trimmed, case-folded, or whitespace-normalized.
+`target_directory`:
 
-### Feature Support Matrix
+- Is required for every entry and is directory-only.
+- Use `""` for the repository root.
+- Use a trailing `/` for every non-root directory, for example `.github/` or `docs/reference/`.
+- Do not include the target file name.
+- The workflow never ignores a filename-like suffix. Values such as `AGENTS.md`, `.github`, and `.github/AGENTS.md` are invalid.
+- `docs.v1/` is valid because the trailing slash makes it directory syntax; dots are not used as filename heuristics.
 
-| Feature | Schema-valid | Runtime-supported | Notes |
-|---|---:|---:|---|
-| `source_path` exact-file sync | Yes | Yes | One source file maps to one target file. |
-| `source_glob` directory/file-set sync | Yes | Yes | Expands matching source files into exact-file sync operations. |
-| `source_to_target` + `whole_file` | Yes | Yes | Byte-for-byte target replacement or verification. |
-| `source_to_target` + `outside_markers` | Yes | Yes | Source outside content is enforced; target-owned blocks may be preserved or fully omitted by projection. |
-| `source_to_target` + `inside_markers` | Yes | Yes | Source inner content is enforced by occurrence order. |
-| `target_to_source` | Yes | No | Recognized for future contract stability; rejected by current execution rules. |
-| `two_way` | Yes | No | Recognized for future contract stability; rejected by current execution rules. |
-| Delete unmatched targets | No | No | Extra files are not deleted automatically. |
+All manifest path fields reject leading `/`, backslashes, Windows drive prefixes, empty path segments, and exact `.` or `..` segments. Dot-prefixed ordinary names such as `.github/` remain valid.
 
-### `source_path` Vs `source_glob`
+### Source Selection And Target Computation
 
-`source_path` means exactly one source file. Wildcards are not interpreted in `source_path`.
+Each entry uses exactly one source selector:
 
-`source_glob` means many source files. The workflow expands the pattern into deterministic exact-file sync operations before verify or sync planning. `target_path` must end with `/` for `source_glob` entries and is treated as the target directory root. Relative layout below the glob base directory is preserved. No workflow-call inputs changed for this feature.
+- `source_path` means one exact source file. The target is `target_directory + basename(source_path)`, so source parent directories are intentionally flattened.
+- `source_glob` means many source files. The workflow expands matches into exact-file operations, preserving relative layout below the glob base directory under `target_directory`.
+
+`glob_base` is the longest leading directory prefix before the first path segment containing `*`, `?`, or `[`.
+
+| `source_glob` | `glob_base` | Matched source | Relative part | With `target_directory: "out/"` |
+|---|---|---|---|---|
+| `*.md` | `""` | `README.md` | `README.md` | `out/README.md` |
+| `docs/*.md` | `docs/` | `docs/readme.md` | `readme.md` | `out/readme.md` |
+| `docs/**/*.md` | `docs/` | `docs/readme.md` | `readme.md` | `out/readme.md` |
+| `docs/**/*.md` | `docs/` | `docs/types/markers.md` | `types/markers.md` | `out/types/markers.md` |
+| `.github/scripts/**/*.md` | `.github/scripts/` | `.github/scripts/a/b.md` | `a/b.md` | `out/a/b.md` |
+
+Hidden matching:
+
+- `include_hidden: false` prevents wildcard segments from implicitly matching dot-prefixed path segments.
+- Explicit dot segments such as `.github` are allowed.
+- A pattern segment starting with `.` may match dot-prefixed names for that segment.
+- `include_hidden: true` allows wildcard segments to match hidden path segments broadly.
+- `**/*.md` with `include_hidden: false` does not traverse `.github`.
+
+`*.*` only matches names containing a dot. Use `*` for all files, `*.md` for Markdown files, and `**/*.md` with `glob.recursive: true` for recursive Markdown sync.
 
 Example recursive documentation sync:
 
@@ -163,7 +165,7 @@ Example recursive documentation sync:
   "source_repo": "BionicCode/workflows",
   "source_ref": "main",
   "source_glob": ".github/scripts/sync-files-from-manifest/documentation/**/*.md",
-  "target_path": ".github/sync-config/documentation/",
+  "target_directory": ".github/sync-config/documentation/",
   "glob": {
     "recursive": true
   },
@@ -174,9 +176,24 @@ Example recursive documentation sync:
 }
 ```
 
+### Feature Support Matrix
+
+| Feature | Schema-valid | Runtime-supported | Notes |
+|---|---:|---:|---|
+| `source_path` exact-file sync | Yes | Yes | One source file maps to one computed target file. |
+| `source_glob` directory/file-set sync | Yes | Yes | Expands matching source files into exact-file sync operations. |
+| `source_to_target` + `whole_file` | Yes | Yes | Byte-for-byte target replacement or verification. |
+| `source_to_target` + `outside_markers` | Yes | Yes | Source outside content is enforced; target-owned blocks may be preserved or fully omitted by projection. |
+| `source_to_target` + `inside_markers` | Yes | Yes | Source inner content is enforced by occurrence order. |
+| `target_to_source` | Yes | No | Recognized for future contract stability; rejected by current execution rules. |
+| `two_way` | Yes | No | Recognized for future contract stability; rejected by current execution rules. |
+| Delete unmatched targets | No | No | Extra files are not deleted automatically. |
+
 ### Marker-Scoped Behavior
 
-For marker-scoped entries, source files and existing target files are decoded with strict UTF-8. Undecodable files fail clearly. Use `whole_file` for binary files or for files where byte-for-byte replacement is desired.
+`whole_file` is byte-for-byte behavior and is suitable for binary files when GitHub source-fetch behavior supports them.
+
+Marker-scoped entries are strict UTF-8 text-file behavior. Marker delimiters are exact substring matches; they are not regular expressions and are not trimmed, case-folded, or whitespace-normalized.
 
 `outside_markers`:
 
@@ -188,48 +205,15 @@ For marker-scoped entries, source files and existing target files are decoded wi
 
 - The target must contain the same exact marker count as the source, matched by occurrence order.
 - Source inner content is enforced into occurrence-matched target blocks.
-- The workflow does not use fuzzy diff, LCS, `difflib`, or heuristic moved-block detection. Same-source-context movement detection requires future marker IDs, named anchors, or source-owned outside context anchors.
+- The workflow does not use fuzzy diff, LCS, `difflib`, or heuristic moved-block detection. Stronger same-source-context detection requires future marker IDs, named anchors, or source-owned outside context anchors.
 
-### Validation Model
+### Validation And Planning Model
 
-JSON Schema is the source of truth for structural manifest metadata:
+JSON Schema is the source of truth for structural manifest metadata: top-level shape, required fields, closed object fields, enum values, marker object shape, marker conditionals, source selector XOR, and `glob` option shape.
 
-- top-level object shape
-- required properties
-- allowed properties with `additionalProperties: false`
-- enum values
-- marker object shape
-- marker conditional requirements
-- schema version
+Python semantic validation handles checks that require normalization, Git state, repository context, or cross-entry analysis: normalized duplicates, source repository format, POSIX path safety, reserved `_sync-files-from-manifest-workflow/` destinations, symlink checks, `basename_unique`, and current execution-policy limits.
 
-Python semantic validation handles checks that require normalization, Git state, repository context, or cross-entry analysis:
-
-- duplicate normalized source identities
-- duplicate normalized target paths
-- source/target basename mismatches
-- `source_glob` local pattern safety
-- repository-relative safe paths
-- file-like paths only
-- reserved `_sync-files-from-manifest-workflow/` target paths
-- symlink targets and symlink parent directories
-- tracked-file scanning for `basename_unique`
-- rejection of schema-recognized but currently unsupported execution policies such as `target_to_source` and `two_way`
-
-After validation, execution reads only the normalized manifest file produced by validation. `sync_files.py` does not reinterpret raw `manifest_json`.
-
-### Caller Workflow Pattern
-
-Caller repositories should keep the workflow generic and keep managed file mappings out of workflow YAML. The Visual Studio template caller workflow:
-
-- runs on `workflow_dispatch`, `pull_request`, `push`, and schedule `17 3 * * *`
-- omits trigger branch filters and gates jobs dynamically against `github.event.repository.default_branch`
-- runs manual maintenance only when `workflow_dispatch` is executed on the default branch
-- fails non-default manual runs with `Manifest initialization must be run from the repository default branch.`
-- fails pull requests with a clear message if the manifest is missing
-- calls `command: init` when the manifest is missing on default-branch maintenance events
-- calls `command: sync` when the manifest exists
-
-This broader-trigger plus dynamic-gating shape is intentional because GitHub Actions trigger branch lists cannot use a dynamic default-branch expression.
+`validate` is local-only. Remote Git tree expansion, zero-match failure, tree truncation failure, generated duplicate target detection, source fetching, marker parsing, and write planning happen during PR verification or branch/default maintenance sync before any writes. Git tree responses marked as truncated fail safely instead of syncing a partial file set. Unmatched target files are not deleted.
 
 ### Common Recipes
 
@@ -240,7 +224,7 @@ Sync `.editorconfig` as a singleton whole file:
   "source_repo": "BionicCode/bioniccode-code-style",
   "source_ref": "main",
   "source_path": ".editorconfig",
-  "target_path": ".editorconfig",
+  "target_directory": "",
   "direction": "source_to_target",
   "lifecycle_policy": "enforce",
   "uniqueness_policy": "basename_unique",
@@ -255,7 +239,7 @@ Sync `Directory.Build.props` as a whole file:
   "source_repo": "BionicCode/bioniccode-code-style",
   "source_ref": "main",
   "source_path": "Directory.Build.props",
-  "target_path": "Directory.Build.props",
+  "target_directory": "",
   "direction": "source_to_target",
   "lifecycle_policy": "enforce",
   "uniqueness_policy": "none",
@@ -270,7 +254,7 @@ Sync `AGENTS.md` or Copilot instructions while preserving repository-specific te
   "source_repo": "BionicCode/template-visual-studio-repository",
   "source_ref": "main",
   "source_path": "AGENTS.md",
-  "target_path": "AGENTS.md",
+  "target_directory": "",
   "direction": "source_to_target",
   "lifecycle_policy": "enforce",
   "uniqueness_policy": "none",
@@ -299,7 +283,7 @@ Seed a starter file once:
   "source_repo": "BionicCode/template-visual-studio-repository",
   "source_ref": "main",
   "source_path": "README.md",
-  "target_path": "README.md",
+  "target_directory": "",
   "direction": "source_to_target",
   "lifecycle_policy": "seed_once",
   "uniqueness_policy": "none",
@@ -314,7 +298,7 @@ Sync workflow manifest documentation recursively:
   "source_repo": "BionicCode/workflows",
   "source_ref": "main",
   "source_glob": ".github/scripts/sync-files-from-manifest/documentation/**/*.md",
-  "target_path": ".github/sync-config/documentation/",
+  "target_directory": ".github/sync-config/documentation/",
   "glob": {
     "recursive": true
   },
@@ -325,19 +309,6 @@ Sync workflow manifest documentation recursively:
 }
 ```
 
-### Failure Mode Examples
-
-- Old top-level array manifest: wrap the array under `entries` and add `schema_version`.
-- Duplicate `target_path`: each normalized target path may appear once.
-- Basename mismatch: `source_path` and `target_path` basenames must match.
-- `source_glob` with `target_path` not ending in `/`: glob targets must be directory roots.
-- `source_glob` with no matches: the workflow fails rather than creating an empty sync PR.
-- `source_glob` tree truncation: source enumeration fails rather than syncing a partial file set.
-- Private source without `source_token`: provide an explicit read-only source token secret.
-- Marker exact-match failure: marker delimiters must match the manifest strings exactly.
-- `outside_markers` partial marker mismatch: keep all source-defined marker blocks or omit all target-owned blocks.
-- Marker-scoped binary or invalid UTF-8 content: use `whole_file` or convert the file to strict UTF-8 text.
-
 ### Security Model
 
 - The caller repository `GITHUB_TOKEN` writes only to the caller repository.
@@ -347,36 +318,13 @@ Sync workflow manifest documentation recursively:
 
 ### Limits And Roadmap
 
-Current:
+Current: `source_path`, `source_glob`, `source_to_target`, `whole_file`, `outside_markers`, and `inside_markers`.
 
-- `source_path`
-- `source_glob`
-- `source_to_target`
-- `whole_file`
-- `outside_markers`
-- `inside_markers`
+Not supported: delete unmatched target files.
 
-Not supported:
+Possible later: delete policy, marker IDs, named anchors, or source-owned outside context anchors.
 
-- delete unmatched target files
-
-Possible later:
-
-- delete policy for unmatched targets
-- marker IDs, named anchors, or source-owned outside context anchors
-
-Deferred:
-
-- `target_to_source`
-- `two_way`
-
-### Authentication And Assumptions
-
-Use optional read-only `source_token` for private cross-repo source reads. Otherwise, public access is used where possible. If a private source repository cannot be read, the workflow fails clearly and asks for `source_token`.
-
-Source files are fetched through GitHub repository contents/raw API behavior. Marker-scoped sync is intended for managed UTF-8 text, config, and document-style files such as `.editorconfig`, `Directory.Build.props`, `AGENTS.md`, and Copilot instruction files. `whole_file` sync remains byte-for-byte behavior and can handle binary files when GitHub source-fetch behavior supports them. Large files are constrained by GitHub repository contents/raw API behavior.
-
-If this reusable workflow is hosted in a private repository and consumed by another private repository, GitHub Actions repository/reuse settings must allow that sharing relationship.
+Deferred: `target_to_source` and `two_way`.
 
 ## Migration From The Legacy `.editorconfig` Workflow
 

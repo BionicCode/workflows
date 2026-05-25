@@ -261,7 +261,7 @@ def validate_expanded_entries(entries: list[ManifestEntry], repo_root: Path) -> 
         existing_target = seen_targets.get(entry.target_identity_key)
         if existing_target is not None:
             raise ManifestError(
-                f"Duplicate generated target_path '{entry.target_path}' from {entry.describe()} and "
+                f"Duplicate computed effective target '{entry.target_path}' from {entry.describe()} and "
                 f"{existing_target.describe()}."
             )
         seen_targets[entry.target_identity_key] = entry

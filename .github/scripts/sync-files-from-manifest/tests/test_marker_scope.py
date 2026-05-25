@@ -29,9 +29,11 @@ from common import (  # noqa: E402
     load_normalized_manifest,
     manifest_entry_path,
     load_schema,
+    parse_manifest_document,
     normalize_repo_relative_path,
     parse_markers,
     validate_and_normalize_manifest,
+    validate_manifest_schema,
     write_normalized_manifest,
 )
 from marker_scope import compose_marker_scoped_bytes, parse_marker_bytes, text_location  # noqa: E402
@@ -55,12 +57,15 @@ def make_entry(
     if managed_scope != "whole_file":
         markers = Markers(start=START, end=END)
 
+    target_directory = target_directory_from_target_path(target_path)
+    source_path = target_path.rsplit("/", 1)[-1]
     return ManifestEntry(
         index=1,
         source_repo="owner/repo",
         source_ref="main",
-        source_path=target_path,
-        target_path=target_path,
+        source_path=source_path,
+        target_directory=target_directory,
+        effective_target_path=target_path,
         direction="source_to_target",
         lifecycle_policy=lifecycle_policy,
         uniqueness_policy="none",
@@ -89,7 +94,8 @@ def make_glob_entry(
         source_path=None,
         source_glob=source_glob,
         glob=GlobOptions(recursive=recursive, include_hidden=include_hidden),
-        target_path=target_path,
+        target_directory=target_path,
+        effective_target_path=target_path,
         direction="source_to_target",
         lifecycle_policy=lifecycle_policy,
         uniqueness_policy=uniqueness_policy,
@@ -108,23 +114,33 @@ def manifest_json(entries: list[dict[str, object]]) -> str:
     return json.dumps({"schema_version": 1, "entries": entries})
 
 
+def target_directory_from_target_path(target_path: str) -> str:
+    if "/" not in target_path:
+        return ""
+    return f"{target_path.rsplit('/', 1)[0]}/"
+
+
 def manifest_entry_payload(
     *,
     source_repo: str = "owner/repo",
     source_ref: str = "main",
     source_path: str = "managed.md",
     source_glob: str | None = None,
-    target_path: str = "managed.md",
+    target_directory: str | None = "",
+    target_path: str | None = None,
     direction: str = "source_to_target",
     lifecycle_policy: str = "enforce",
     uniqueness_policy: str = "none",
     managed_scope: str = "whole_file",
     markers: dict[str, str] | None = None,
+    glob: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    if target_path is not None:
+        target_directory = target_directory_from_target_path(target_path)
     payload: dict[str, object] = {
         "source_repo": source_repo,
         "source_ref": source_ref,
-        "target_path": target_path,
+        "target_directory": target_directory,
         "direction": direction,
         "lifecycle_policy": lifecycle_policy,
         "uniqueness_policy": uniqueness_policy,
@@ -134,9 +150,133 @@ def manifest_entry_payload(
         payload["source_path"] = source_path
     else:
         payload["source_glob"] = source_glob
+    if glob is not None:
+        payload["glob"] = glob
     if markers is not None:
         payload["markers"] = markers
     return payload
+
+
+class ManifestSchemaContractTests(unittest.TestCase):
+    def assert_schema_valid(self, entry_payload: dict[str, object]) -> None:
+        validate_manifest_schema(parse_manifest_document(manifest_json([entry_payload])), load_schema(default_schema_path()))
+
+    def assert_schema_invalid(self, entry_payload: dict[str, object]) -> None:
+        with self.assertRaises(ManifestError):
+            self.assert_schema_valid(entry_payload)
+
+    def test_exact_file_entry_schema_is_valid(self) -> None:
+        self.assert_schema_valid(manifest_entry_payload(source_path="docs/README.md", target_directory=""))
+
+    def test_glob_entry_schema_is_valid_without_options_for_non_recursive_pattern(self) -> None:
+        self.assert_schema_valid(manifest_entry_payload(source_glob="docs/*.md", target_directory="docs/"))
+
+    def test_glob_entry_schema_is_valid_with_options(self) -> None:
+        self.assert_schema_valid(
+            manifest_entry_payload(
+                source_glob="docs/**/*.md",
+                target_directory="docs/",
+                glob={"recursive": True, "include_hidden": False},
+            )
+        )
+
+    def test_source_selector_xor_is_schema_validated(self) -> None:
+        both = manifest_entry_payload(source_path="docs/README.md", target_directory="")
+        both["source_glob"] = "docs/*.md"
+        neither = manifest_entry_payload(source_path="docs/README.md", target_directory="")
+        del neither["source_path"]
+
+        self.assert_schema_invalid(both)
+        self.assert_schema_invalid(neither)
+
+    def test_stale_target_path_and_unknown_fields_are_schema_invalid(self) -> None:
+        stale = manifest_entry_payload(source_path="AGENTS.md", target_directory="")
+        stale["target_path"] = "AGENTS.md"
+        only_stale = manifest_entry_payload(source_path="AGENTS.md", target_directory="")
+        del only_stale["target_directory"]
+        only_stale["target_path"] = "AGENTS.md"
+        unknown = manifest_entry_payload(source_path="AGENTS.md", target_directory="")
+        unknown["extra"] = True
+
+        self.assert_schema_invalid(stale)
+        self.assert_schema_invalid(only_stale)
+        self.assert_schema_invalid(unknown)
+
+    def test_glob_is_schema_invalid_with_source_path(self) -> None:
+        self.assert_schema_invalid(
+            manifest_entry_payload(
+                source_path="docs/README.md",
+                target_directory="",
+                glob={"recursive": False},
+            )
+        )
+
+    def test_glob_options_schema_is_closed_and_typed(self) -> None:
+        self.assert_schema_valid(
+            manifest_entry_payload(
+                source_glob="docs/*.md",
+                target_directory="docs/",
+                glob={"include_hidden": False},
+            )
+        )
+        self.assert_schema_invalid(
+            manifest_entry_payload(
+                source_glob="docs/*.md",
+                target_directory="docs/",
+                glob={"unknown": True},
+            )
+        )
+        self.assert_schema_invalid(
+            manifest_entry_payload(
+                source_glob="docs/**/*.md",
+                target_directory="docs/",
+                glob={"recursive": "true"},
+            )
+        )
+
+    def test_double_star_requires_explicit_recursive_true_in_schema(self) -> None:
+        self.assert_schema_valid(
+            manifest_entry_payload(
+                source_glob="docs/**/*.md",
+                target_directory="docs/",
+                glob={"recursive": True},
+            )
+        )
+        for glob_options in (None, {}, {"recursive": False}, {"include_hidden": False}):
+            with self.subTest(glob=glob_options):
+                self.assert_schema_invalid(
+                    manifest_entry_payload(
+                        source_glob="docs/**/*.md",
+                        target_directory="docs/",
+                        glob=glob_options,
+                    )
+                )
+
+    def test_target_directory_schema_accepts_directory_syntax_only(self) -> None:
+        for value in ("", ".github/", "docs/", "docs.v1/", "docs/reference/"):
+            with self.subTest(value=value):
+                self.assert_schema_valid(manifest_entry_payload(source_path="AGENTS.md", target_directory=value))
+
+        for value in (
+            "/",
+            "AGENTS.md",
+            ".github",
+            ".github/AGENTS.md",
+            "docs",
+            "/docs/",
+            "./",
+            "../",
+            "docs/./",
+            "docs/../x/",
+            ".github/../x/",
+            "a//b/",
+            "docs//",
+            "docs///",
+            "C:/docs/",
+            "docs\\sub/",
+        ):
+            with self.subTest(value=value):
+                self.assert_schema_invalid(manifest_entry_payload(source_path="AGENTS.md", target_directory=value))
 
 
 class SourceGlobValidationTests(unittest.TestCase):
@@ -209,12 +349,12 @@ class SourceGlobValidationTests(unittest.TestCase):
             self.validate_manifest(
                 manifest_entry_payload(
                     source_glob="docs/*.md",
-                    target_path="docs",
+                    target_directory="docs",
                 )
             )
 
     def test_source_glob_without_metacharacter_is_invalid(self) -> None:
-        with self.assertRaisesRegex(ManifestError, "must contain at least one glob metacharacter"):
+        with self.assertRaisesRegex(ManifestError, "schema validation failed"):
             self.validate_manifest(
                 manifest_entry_payload(
                     source_glob="docs/readme.md",
@@ -223,7 +363,7 @@ class SourceGlobValidationTests(unittest.TestCase):
             )
 
     def test_source_glob_rejects_double_star_when_recursive_false(self) -> None:
-        with self.assertRaisesRegex(ManifestError, "glob.recursive is false"):
+        with self.assertRaisesRegex(ManifestError, "schema validation failed"):
             self.validate_manifest(
                 manifest_entry_payload(
                     source_glob="docs/**/*.md",
@@ -232,7 +372,16 @@ class SourceGlobValidationTests(unittest.TestCase):
             )
 
     def test_source_glob_rejects_unsafe_paths(self) -> None:
-        for source_glob in ("/docs/*.md", "C:/docs/*.md", "docs\\*.md", "docs/../*.md"):
+        for source_glob in (
+            "/*.md",
+            "./*.md",
+            "../*.md",
+            "docs//*.md",
+            "docs\\*.md",
+            "C:/docs/*.md",
+            "docs/./*.md",
+            "docs/../*.md",
+        ):
             with self.subTest(source_glob=source_glob):
                 with self.assertRaises(ManifestError):
                     self.validate_manifest(
@@ -241,6 +390,79 @@ class SourceGlobValidationTests(unittest.TestCase):
                             target_path="docs/",
                         )
                     )
+
+    def test_source_path_rejects_unsafe_or_pattern_paths(self) -> None:
+        for source_path in (
+            "",
+            "/README.md",
+            "./README.md",
+            "../README.md",
+            "docs//README.md",
+            "docs\\README.md",
+            "C:/docs/README.md",
+            "docs/./README.md",
+            "docs/../README.md",
+            "docs/",
+            "*.md",
+            "docs/*.md",
+            "docs/**/*.md",
+        ):
+            with self.subTest(source_path=source_path):
+                with self.assertRaises(ManifestError):
+                    self.validate_manifest(manifest_entry_payload(source_path=source_path, target_directory=""))
+
+    def test_dot_prefixed_source_paths_are_valid(self) -> None:
+        exact = self.validate_manifest(
+            manifest_entry_payload(source_path=".github/copilot-instructions.md", target_directory="")
+        )
+        glob = self.validate_manifest(
+            manifest_entry_payload(
+                source_glob=".github/scripts/**/*.md",
+                target_directory=".github/sync-config/",
+                glob={"recursive": True},
+            )
+        )
+
+        self.assertEqual(exact[0].source_path, ".github/copilot-instructions.md")
+        self.assertEqual(glob[0].source_glob, ".github/scripts/**/*.md")
+
+    def test_double_star_must_be_full_segment_and_recursive(self) -> None:
+        self.validate_manifest(
+            manifest_entry_payload(
+                source_glob="docs/**/*.md",
+                target_directory="docs/",
+                glob={"recursive": True},
+            )
+        )
+        for source_glob, glob_options in (
+            ("docs/**.md", {"recursive": True}),
+            ("docs/a**/*.md", {"recursive": True}),
+            ("docs/**/*.md", {"recursive": False}),
+        ):
+            with self.subTest(source_glob=source_glob, glob=glob_options):
+                with self.assertRaises(ManifestError):
+                    self.validate_manifest(
+                        manifest_entry_payload(
+                            source_glob=source_glob,
+                            target_directory="docs/",
+                            glob=glob_options,
+                        )
+                    )
+
+    def test_exact_file_target_computation_flattens_to_target_directory(self) -> None:
+        root_file = self.validate_manifest(
+            manifest_entry_payload(source_path="AGENTS.md", target_directory="")
+        )[0]
+        nested_source = self.validate_manifest(
+            manifest_entry_payload(source_path="docs/README.md", target_directory="")
+        )[0]
+        nested_target = self.validate_manifest(
+            manifest_entry_payload(source_path="docs/README.md", target_directory="out/")
+        )[0]
+
+        self.assertEqual(root_file.target_path, "AGENTS.md")
+        self.assertEqual(nested_source.target_path, "README.md")
+        self.assertEqual(nested_target.target_path, "out/README.md")
 
 
 class DocumentationConsistencyTests(unittest.TestCase):
@@ -276,7 +498,8 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("Unmatched target files are not deleted", text)
         self.assertIn("*.*", text)
         self.assertIn("include_hidden", text)
-        self.assertIn("target_path", text)
+        self.assertIn("target_directory", text)
+        self.assertIn("Path Naming Rules", text)
         self.assertIn("directory root", text)
 
 
@@ -1055,7 +1278,7 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
 
     def test_manifest_entry_path_converts_human_entry_numbers_to_zero_based_jsonpath(self) -> None:
         self.assertEqual("$.entries[0]", manifest_entry_path(1))
-        self.assertEqual("$.entries[1].target_path", manifest_entry_path(2, "target_path"))
+        self.assertEqual("$.entries[1].target_directory", manifest_entry_path(2, "target_directory"))
 
     def test_manifest_entry_path_rejects_non_positive_entry_numbers(self) -> None:
         with self.assertRaises(ValueError):
@@ -1077,8 +1300,8 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             manifest = manifest_json(
                 [
-                    manifest_entry_payload(source_repo="owner/one", source_path="same.md", target_path="same.md"),
-                    manifest_entry_payload(source_repo="owner/two", source_path="same.md", target_path="same.md"),
+                    manifest_entry_payload(source_repo="owner/one", source_path="docs/README.md", target_directory=""),
+                    manifest_entry_payload(source_repo="owner/two", source_path="other/README.md", target_directory=""),
                 ]
             )
 
@@ -1091,34 +1314,26 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
                 )
 
             message = str(context.exception)
-            self.assertIn("$.entries[1].target_path", message)
-            self.assertIn("$.entries[0].target_path", message)
+            self.assertIn("$.entries[1].target_directory", message)
+            self.assertIn("$.entries[0].target_directory", message)
+            self.assertIn("README.md", message)
 
-    def test_basename_mismatch_semantic_error_includes_jsonpaths(self) -> None:
+    def test_exact_source_parent_directories_are_not_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            manifest = manifest_json(
-                [
-                    manifest_entry_payload(source_path="source.md", target_path="target.md"),
-                ]
+            entries = validate_and_normalize_manifest(
+                manifest_json([manifest_entry_payload(source_path="docs/README.md", target_directory="out/")]),
+                Path(temp_dir),
+                default_schema_path(),
+                default_rules_path(),
             )
 
-            with self.assertRaises(ManifestError) as context:
-                validate_and_normalize_manifest(
-                    manifest,
-                    Path(temp_dir),
-                    default_schema_path(),
-                    default_rules_path(),
-                )
-
-            message = str(context.exception)
-            self.assertIn("$.entries[0].source_path", message)
-            self.assertIn("$.entries[0].target_path", message)
+            self.assertEqual(entries[0].target_path, "out/README.md")
 
     def test_unsafe_path_semantic_error_includes_jsonpath(self) -> None:
         with self.assertRaises(ManifestError) as context:
-            normalize_repo_relative_path("../bad.md", "target_path", 1)
+            common.normalize_target_directory("docs/../x/", "target_directory", 1)
 
-        self.assertIn("$.entries[0].target_path", str(context.exception))
+        self.assertIn("$.entries[0].target_directory", str(context.exception))
 
     def test_marker_semantic_error_includes_jsonpath(self) -> None:
         metadata = load_manifest_metadata(load_schema(default_schema_path()))
@@ -1147,7 +1362,7 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
                     default_rules_path(),
                 )
 
-            self.assertIn("$.entries[0].target_path", str(context.exception))
+            self.assertIn("$.entries[0].target_directory", str(context.exception))
 
     def test_source_fetch_failure_includes_source_field_jsonpath_hints(self) -> None:
         entry = make_entry("whole_file")
@@ -1250,7 +1465,8 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
                 source_path=None,
                 source_glob=second_entry.source_glob,
                 glob=second_entry.glob,
-                target_path=second_entry.target_path,
+                target_directory=second_entry.target_directory,
+                effective_target_path=second_entry.target_path,
                 direction=second_entry.direction,
                 lifecycle_policy=second_entry.lifecycle_policy,
                 uniqueness_policy=second_entry.uniqueness_policy,
@@ -1260,7 +1476,45 @@ class MarkerScopeSyncLifecycleTests(unittest.TestCase):
             self.stub_trees({"docs/*.md": ["docs/readme.md"], "other/*.md": ["other/readme.md"]})
             self.stub_sources_by_source_path({"docs/readme.md": b"docs", "other/readme.md": b"other"})
 
-            with self.assertRaisesRegex(ManifestError, "Duplicate generated target_path"):
+            with self.assertRaisesRegex(ManifestError, "Duplicate computed effective target"):
+                sync_files.sync_entries(root, manifest_path, None)
+
+            self.assertFalse((root / "out/readme.md").exists())
+
+    def test_exact_and_glob_duplicate_computed_target_fails_before_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            exact_entry = ManifestEntry(
+                index=1,
+                source_repo="owner/repo",
+                source_ref="main",
+                source_path="other/readme.md",
+                target_directory="out/",
+                effective_target_path="out/readme.md",
+                direction="source_to_target",
+                lifecycle_policy="enforce",
+                uniqueness_policy="none",
+                managed_scope="whole_file",
+            )
+            glob_entry = ManifestEntry(
+                index=2,
+                source_repo="owner/repo",
+                source_ref="main",
+                source_path=None,
+                source_glob="docs/*.md",
+                glob=GlobOptions(),
+                target_directory="out/",
+                effective_target_path="out/",
+                direction="source_to_target",
+                lifecycle_policy="enforce",
+                uniqueness_policy="none",
+                managed_scope="whole_file",
+            )
+            manifest_path = self.write_manifest(root, [exact_entry, glob_entry])
+            self.stub_tree(["docs/readme.md"])
+            self.stub_sources_by_source_path({"other/readme.md": b"other", "docs/readme.md": b"docs"})
+
+            with self.assertRaisesRegex(ManifestError, "Duplicate computed effective target"):
                 sync_files.sync_entries(root, manifest_path, None)
 
             self.assertFalse((root / "out/readme.md").exists())

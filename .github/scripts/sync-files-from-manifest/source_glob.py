@@ -5,10 +5,11 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
-from pathlib import PurePosixPath
 
 from common import (
     FIELD_SOURCE_GLOB,
+    FIELD_EFFECTIVE_TARGET_PATH,
+    FIELD_TARGET_DIRECTORY,
     GITHUB_API_VERSION,
     SOURCE_FETCH_TIMEOUT_SECONDS,
     GlobOptions,
@@ -16,6 +17,7 @@ from common import (
     ManifestError,
     SourceFetchError,
     contains_glob_metacharacter,
+    join_target_directory,
     manifest_entry_path,
     normalize_repo_relative_file_path,
 )
@@ -156,20 +158,24 @@ def expand_source_glob_entry(
         if not relative_source_path:
             continue
 
-        target_path = PurePosixPath(entry.target_path, relative_source_path).as_posix()
+        target_path = join_target_directory(entry.target_directory, relative_source_path)
+        manifest_properties = dict(entry.manifest_properties or {})
+        manifest_properties[FIELD_TARGET_DIRECTORY] = entry.target_directory
+        manifest_properties[FIELD_EFFECTIVE_TARGET_PATH] = target_path
         expanded_entries.append(
             ManifestEntry(
                 index=entry.index,
                 source_repo=entry.source_repo,
                 source_ref=entry.source_ref,
                 source_path=source_path,
-                target_path=target_path,
+                target_directory=entry.target_directory,
+                effective_target_path=target_path,
                 direction=entry.direction,
                 lifecycle_policy=entry.lifecycle_policy,
                 uniqueness_policy=entry.uniqueness_policy,
                 managed_scope=entry.managed_scope,
                 markers=entry.markers,
-                manifest_properties=dict(entry.manifest_properties or {}),
+                manifest_properties=manifest_properties,
                 expanded_file_index=expanded_index,
                 parent_source_glob=entry.source_glob,
             )

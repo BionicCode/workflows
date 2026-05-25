@@ -24,7 +24,8 @@ FIELD_SOURCE_REPO = "source_repo"
 FIELD_SOURCE_REF = "source_ref"
 FIELD_SOURCE_PATH = "source_path"
 FIELD_SOURCE_GLOB = "source_glob"
-FIELD_TARGET_PATH = "target_path"
+FIELD_TARGET_DIRECTORY = "target_directory"
+FIELD_EFFECTIVE_TARGET_PATH = "effective_target_path"
 FIELD_DIRECTION = "direction"
 FIELD_LIFECYCLE_POLICY = "lifecycle_policy"
 FIELD_UNIQUENESS_POLICY = "uniqueness_policy"
@@ -96,7 +97,8 @@ class ManifestEntry:
     source_repo: str
     source_ref: str
     source_path: str | None
-    target_path: str
+    target_directory: str
+    effective_target_path: str
     direction: str
     lifecycle_policy: str
     uniqueness_policy: str
@@ -109,8 +111,17 @@ class ManifestEntry:
     parent_source_glob: str | None = None
 
     @property
+    def target_path(self) -> str:
+        """Return the computed execution path used by sync internals.
+
+        Public manifests use target_directory. The runtime still needs a
+        concrete file path after exact-file or glob expansion.
+        """
+        return self.effective_target_path
+
+    @property
     def basename(self) -> str:
-        return PurePosixPath(self.target_path).name
+        return PurePosixPath(self.effective_target_path).name
 
     @property
     def source_identity_key(self) -> tuple[str, str, str]:
@@ -119,7 +130,7 @@ class ManifestEntry:
 
     @property
     def target_identity_key(self) -> str:
-        return self.target_path
+        return self.effective_target_path
 
     @property
     def is_glob_entry(self) -> bool:
@@ -138,7 +149,7 @@ class ManifestEntry:
 
         return (
             f"{prefix} "
-            f"({self.source_repo}@{self.source_ref}:{self.source_label} -> {self.target_path}; "
+            f"({self.source_repo}@{self.source_ref}:{self.source_label} -> {self.effective_target_path}; "
             f"lifecycle={self.lifecycle_policy}, "
             f"uniqueness={self.uniqueness_policy}, "
             f"scope={self.managed_scope})"
@@ -153,7 +164,8 @@ class ManifestEntry:
             "index": self.index,
             "source_repo": self.source_repo,
             "source_ref": self.source_ref,
-            "target_path": self.target_path,
+            "target_directory": self.target_directory,
+            "effective_target_path": self.effective_target_path,
             "direction": self.direction,
             "lifecycle_policy": self.lifecycle_policy,
             "uniqueness_policy": self.uniqueness_policy,
@@ -191,7 +203,8 @@ class ManifestEntry:
             )
             if data.get("source_glob") is not None
             else None,
-            target_path=str(data["target_path"]),
+            target_directory=str(data.get("target_directory", "")),
+            effective_target_path=str(data["effective_target_path"]),
             direction=str(data["direction"]),
             lifecycle_policy=str(data["lifecycle_policy"]),
             uniqueness_policy=str(data["uniqueness_policy"]),
@@ -420,10 +433,24 @@ def normalize_repo_relative_file_path(value: str, field_name: str, index: int) -
     return normalized
 
 
-def normalize_repo_relative_directory_path(value: str, field_name: str, index: int) -> str:
-    if not value.endswith("/"):
+def normalize_source_path(value: str, field_name: str, index: int) -> str:
+    normalized = normalize_repo_relative_file_path(value, field_name, index)
+    if contains_glob_metacharacter(normalized):
         raise ManifestError(
-            f"Manifest entry {index} uses source_glob, so target_path must be a directory path ending with '/' "
+            f"Manifest entry {index}: source_path '{value}' is exact-file only and must not contain "
+            f"glob metacharacters; use source_glob for patterns at {manifest_entry_path(index, field_name)}."
+        )
+    return normalized
+
+
+def normalize_target_directory(value: str, field_name: str, index: int) -> str:
+    if value == "":
+        return ""
+
+    if not value.endswith("/") or value.endswith("//"):
+        raise ManifestError(
+            f"Manifest entry {index}: target_directory is directory-only; use '' for the repository root "
+            f"or a non-root directory ending with exactly one '/' "
             f"at {manifest_entry_path(index, field_name)}."
         )
 
@@ -432,10 +459,20 @@ def normalize_repo_relative_directory_path(value: str, field_name: str, index: i
     normalized = PurePosixPath(trimmed_value).as_posix()
     if normalized in {"", "."}:
         raise ManifestError(
-            f"Manifest entry {index}: '{field_name}' must point to a non-root directory "
+            f"Manifest entry {index}: use target_directory '' for the repository root; '/' is not valid "
             f"at {manifest_entry_path(index, field_name)}."
         )
     return f"{normalized}/"
+
+
+def join_target_directory(target_directory: str, relative_file_path: str) -> str:
+    if target_directory == "":
+        return relative_file_path
+    return PurePosixPath(target_directory, relative_file_path).as_posix()
+
+
+def effective_target_path_for_source(source_path: str, target_directory: str) -> str:
+    return join_target_directory(target_directory, PurePosixPath(source_path).name)
 
 
 def contains_glob_metacharacter(value: str) -> bool:
@@ -551,7 +588,7 @@ def build_entries(manifest_document: dict[str, Any], metadata: ManifestMetadata)
         source_path = None
         source_glob = None
         if FIELD_SOURCE_PATH in raw_entry:
-            source_path = normalize_repo_relative_file_path(
+            source_path = normalize_source_path(
                 require_string_property(raw_entry, FIELD_SOURCE_PATH, raw_index),
                 FIELD_SOURCE_PATH,
                 raw_index,
@@ -564,18 +601,21 @@ def build_entries(manifest_document: dict[str, Any], metadata: ManifestMetadata)
                 recursive=(glob_options or GlobOptions()).recursive,
             )
 
-        target_path = (
-            normalize_repo_relative_directory_path(
-                require_string_property(raw_entry, FIELD_TARGET_PATH, raw_index),
-                FIELD_TARGET_PATH,
-                raw_index,
+        raw_target_directory = raw_entry.get(FIELD_TARGET_DIRECTORY)
+        if not isinstance(raw_target_directory, str):
+            raise ManifestError(
+                f"Manifest entry {raw_index}: 'target_directory' must be a string "
+                f"at {manifest_entry_path(raw_index, FIELD_TARGET_DIRECTORY)}."
             )
+        target_directory = normalize_target_directory(
+            raw_target_directory,
+            FIELD_TARGET_DIRECTORY,
+            raw_index,
+        )
+        effective_target_path = (
+            target_directory
             if source_glob is not None
-            else normalize_repo_relative_file_path(
-                require_string_property(raw_entry, FIELD_TARGET_PATH, raw_index),
-                FIELD_TARGET_PATH,
-                raw_index,
-            )
+            else effective_target_path_for_source(source_path or "", target_directory)
         )
 
         manifest_properties = dict(raw_entry)
@@ -588,7 +628,8 @@ def build_entries(manifest_document: dict[str, Any], metadata: ManifestMetadata)
                 FIELD_GLOB_RECURSIVE: (glob_options or GlobOptions()).recursive,
                 FIELD_GLOB_INCLUDE_HIDDEN: (glob_options or GlobOptions()).include_hidden,
             }
-        manifest_properties[FIELD_TARGET_PATH] = target_path
+        manifest_properties[FIELD_TARGET_DIRECTORY] = target_directory
+        manifest_properties[FIELD_EFFECTIVE_TARGET_PATH] = effective_target_path
 
         entries.append(
             ManifestEntry(
@@ -598,7 +639,8 @@ def build_entries(manifest_document: dict[str, Any], metadata: ManifestMetadata)
                 source_path=source_path,
                 source_glob=source_glob,
                 glob=glob_options,
-                target_path=target_path,
+                target_directory=target_directory,
+                effective_target_path=effective_target_path,
                 direction=require_string_property(raw_entry, FIELD_DIRECTION, raw_index),
                 lifecycle_policy=require_string_property(raw_entry, FIELD_LIFECYCLE_POLICY, raw_index),
                 uniqueness_policy=require_string_property(raw_entry, FIELD_UNIQUENESS_POLICY, raw_index),
@@ -675,32 +717,27 @@ def run_unique_normalized_target_path(entries: list[ManifestEntry], rule: dict[s
         existing_index = seen.get(entry.target_identity_key)
         if existing_index is not None:
             raise ManifestError(
-                f"{entry.describe()} duplicates target_path already declared by manifest entry {existing_index}. "
-                f"Current target at {manifest_entry_path(entry.index, 'target_path')}; existing target at "
-                f"{manifest_entry_path(existing_index, 'target_path')}."
+                f"{entry.describe()} computes duplicate effective target '{entry.effective_target_path}' "
+                f"already declared by manifest entry {existing_index}. Current target directory at "
+                f"{manifest_entry_path(entry.index, FIELD_TARGET_DIRECTORY)}; existing target directory at "
+                f"{manifest_entry_path(existing_index, FIELD_TARGET_DIRECTORY)}."
             )
         seen[entry.target_identity_key] = entry.index
 
 
 def run_source_target_basename_must_match(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
-    for entry in entries:
-        if entry.is_glob_entry:
-            continue
-        if entry.source_path is None:
-            raise ManifestError(f"{entry.describe()} must define source_path for exact-file basename validation.")
-        if PurePosixPath(entry.source_path).name != PurePosixPath(entry.target_path).name:
-            raise ManifestError(
-                f"{entry.describe()} has a basename mismatch between source_path '{entry.source_path}' "
-                f"and target_path '{entry.target_path}' at {manifest_entry_path(entry.index, 'source_path')} "
-                f"and {manifest_entry_path(entry.index, 'target_path')}."
-            )
+    # Public manifests now specify a directory only. Exact-file and glob targets
+    # derive their file names from source paths, so source/target basename drift
+    # is no longer a public input state to reject.
+    return None
 
 
 def run_repository_relative_safe_paths(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
     for entry in entries:
         if entry.source_path is not None:
-            normalize_repo_relative_file_path(entry.source_path, FIELD_SOURCE_PATH, entry.index)
-            normalize_repo_relative_file_path(entry.target_path, FIELD_TARGET_PATH, entry.index)
+            normalize_source_path(entry.source_path, FIELD_SOURCE_PATH, entry.index)
+            normalize_target_directory(entry.target_directory, FIELD_TARGET_DIRECTORY, entry.index)
+            normalize_repo_relative_file_path(entry.effective_target_path, FIELD_EFFECTIVE_TARGET_PATH, entry.index)
         elif entry.source_glob is not None:
             normalize_source_glob(
                 entry.source_glob,
@@ -708,14 +745,17 @@ def run_repository_relative_safe_paths(entries: list[ManifestEntry], rule: dict[
                 entry.index,
                 recursive=(entry.glob or GlobOptions()).recursive,
             )
-            normalize_repo_relative_directory_path(entry.target_path, FIELD_TARGET_PATH, entry.index)
+            normalize_target_directory(entry.target_directory, FIELD_TARGET_DIRECTORY, entry.index)
 
 
 def run_file_like_paths_only(entries: list[ManifestEntry], rule: dict[str, Any]) -> None:
     for entry in entries:
         if entry.is_glob_entry:
             continue
-        for field_name, path_value in (("source_path", entry.source_path), ("target_path", entry.target_path)):
+        for field_name, path_value in (
+            (FIELD_SOURCE_PATH, entry.source_path),
+            (FIELD_EFFECTIVE_TARGET_PATH, entry.effective_target_path),
+        ):
             if path_value is None:
                 continue
             if path_value.endswith("/") or PurePosixPath(path_value).name == "":
@@ -735,7 +775,7 @@ def run_reject_reserved_target_path(entries: list[ManifestEntry], rule: dict[str
             if isinstance(prefix, str) and entry.target_path.startswith(prefix):
                 raise ManifestError(
                     f"{entry.describe()} targets reserved implementation scratch space '{prefix}' "
-                    f"at {manifest_entry_path(entry.index, 'target_path')}."
+                    f"at {manifest_entry_path(entry.index, FIELD_TARGET_DIRECTORY)}."
                 )
 
 
@@ -773,7 +813,7 @@ def run_basename_unique_tracked_file_scan(entries: list[ManifestEntry], rule: di
             raise ManifestError(
                 f"{entry.describe()} declares basename uniqueness, but other manifest targets "
                 f"share basename '{entry.basename}': {conflicts}. Entry at "
-                f"{manifest_entry_path(entry.index, 'target_path')}."
+                f"{manifest_entry_path(entry.index, FIELD_TARGET_DIRECTORY)}."
             )
 
         conflicting_tracked_paths = sorted(
@@ -788,7 +828,7 @@ def run_basename_unique_tracked_file_scan(entries: list[ManifestEntry], rule: di
             raise ManifestError(
                 f"{entry.describe()} declares basename uniqueness, but tracked repository files "
                 f"already share basename '{entry.basename}': {conflicts}. Entry at "
-                f"{manifest_entry_path(entry.index, 'target_path')}."
+                f"{manifest_entry_path(entry.index, FIELD_TARGET_DIRECTORY)}."
             )
 
 
