@@ -1,3 +1,22 @@
+---
+Version: 1
+Created: 2026-05-28T20:25:18+00:00
+Updated: 2026-05-28T20:25:18+00:00
+Author: BionicCode
+---
+<!-- doc-metadata-presentation:start -->
+<details>
+<summary>Change History</summary>
+
+
+</details>
+
+---
+
+<br>
+<br>
+<!-- doc-metadata-presentation:end -->
+
 # AGENTS.md (Version 3.1)
 
 <!--
