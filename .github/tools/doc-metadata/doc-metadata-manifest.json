@@ -39,6 +39,7 @@
     "docs/**/*.markdown",
     "test/*AGENT*.md",
     "src/*AGENT*.md",
+    ".github/scripts/sync-files-from-manifest/documentation/**/*.md",
     ".github/tools/doc-metadata/documentation/**/*.md",
     ".github/tools/sync-config/documentation/**/*.md",
     ".github/instructions/**/*.md",
