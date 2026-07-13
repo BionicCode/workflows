@@ -1,0 +1,1028 @@
+# Repository Maintenance Recovery Backlog
+
+Snapshot date: 2026-07-11  
+Status: proposed authoritative replacement after Workflows-source review  
+Primary implementation repository: `BionicCode/workflows`  
+First caller migration repository: `BionicCode/template-visual-studio-repository`
+
+## 1. Purpose and authority
+
+This backlog is the single ordered ledger for recovering and consolidating managed-file synchronization and document-metadata automation.
+
+It records:
+
+- the reviewed repository state;
+- approved architecture and product conventions;
+- confirmed defects and unverified areas;
+- the only allowed pass order;
+- exact repository/session boundaries;
+- per-pass scope, validation, stop conditions, and review gates;
+- the evidence required before later passes unlock.
+
+This file does not authorize edits by itself. Every implementation pass still requires a user prompt naming:
+
+- the repository and exact expected base SHA;
+- allowed files;
+- prohibited files;
+- goal and acceptance criteria;
+- validation;
+- stop conditions;
+- whether the pass may be merged independently.
+
+`repository-review-protocol.md` is authoritative only for reusable review and validation rules. It must not contain competing task status or product-roadmap instructions.
+
+## 2. Reviewed immutable state
+
+### `BionicCode/workflows`
+
+Reviewed `main`:
+
+```text
+fbdd7ff310a42b58a25757407ed81537e2fa066b
+```
+
+### `BionicCode/template-visual-studio-repository`
+
+Reviewed `main`:
+
+```text
+dd569d77b46e0198185958cda865118b8508b7d6
+```
+
+Open automation PRs at the reviewed target state:
+
+- PR #34: sync branch, currently zero changed files;
+- PR #35: doc-metadata repair branch created before ownership convergence.
+
+Both repositories must be re-resolved at the start of every pass. A moving automation branch is evidence, not a new roadmap baseline.
+
+## 3. Full review verdict for the Workflows version
+
+### 3.1 Usable baseline
+
+The Workflows copy is a valid starting implementation and must not be rewritten from scratch.
+
+At the reviewed commits, the following core blobs are identical between Workflows and the template repository:
+
+| Surface | Blob SHA |
+|---|---|
+| `.github/workflows/doc-metadata.yml` | `7e9f28c9258079fa0953723b8cd584e69d01a41a` |
+| `.github/scripts/doc-metadata/update-doc-metadata.ps1` | `8d46e585df9df83337a152f6e84bfb05602e302a` |
+| `.github/scripts/doc-metadata/resolve-content-change-links.ps1` | `94f2900b6b93210e8ad7ea360c28faa46174d73d` |
+| `.github/scripts/doc-metadata/tests/Invoke-DocMetadataAcceptanceTests.ps1` | `b84f5508c3214da05854ce2362c19810ef4efff3` |
+| `.github/tools/doc-metadata/doc-metadata-manifest.schema.json` | `28dc0bb7fbe1d9d4c3f50f1c74f4d894f1e73f12` |
+
+No manual “copy newer code into Workflows” step is required before implementation begins.
+
+Documentation and repository-specific manifests are not assumed identical or interchangeable.
+
+### 3.2 Confirmed defects and readiness gaps
+
+1. **Not yet a centrally authoritative engine.**  
+   `.github/workflows/doc-metadata.yml` already supports `workflow_call`, but it checks out the caller/default repository as `trusted` and executes:
+
+   ```text
+   ../trusted/.github/scripts/doc-metadata/update-doc-metadata.ps1
+   ```
+
+   In a cross-repository call, that would still execute a caller-local engine copy. The reusable workflow must instead check out its own defining repository and commit through `job.workflow_repository` and `job.workflow_sha`, while separately checking out caller trusted state and caller working state.
+
+2. **Broken Workflows self-orchestrator.**  
+   `.github/workflows/repository-maintenance.yml` contains target-style sync orchestration and calls:
+
+   ```text
+   ./.github/workflows/sync-managed-files.yml
+   ```
+
+   That file is absent in `BionicCode/workflows`. The workflow also has a schedule and hardcoded `main`/`master` doc-metadata routing. Workflows must remain passive as a shared source and must not contain target-style sync orchestration.
+
+3. **Initializer destination mismatch.**  
+   `.github/scripts/sync-files-from-manifest/init_manifest.py` writes to:
+
+   ```text
+   .github/sync-config/
+   ```
+
+   The current caller wrapper reads:
+
+   ```text
+   .github/tools/sync-config/sync-manifest.json
+   ```
+
+   The initializer cannot be extended safely until one canonical caller path is approved and all code, schema references, documentation, fixtures, and examples use it.
+
+4. **Initializer is not a package installer.**  
+   The current `init` behavior installs only sync schema, starter manifest, and sync documentation. It cannot yet:
+
+   - install a thin doc-metadata wrapper;
+   - render a pinned reusable-workflow SHA;
+   - install doc-metadata schema/docs/default manifest;
+   - structurally add or update managed entries in an existing sync manifest;
+   - distinguish caller-owned seed files from continuously managed package files;
+   - upgrade an existing installation safely.
+
+5. **Literal pinning requires generated wrapper content.**  
+   GitHub does not allow contexts or expressions in `jobs.<job_id>.uses`. A caller wrapper therefore needs a literal ref. The installer must render the exact approved Workflows commit SHA into the wrapper. The wrapper cannot be treated as a plain byte-for-byte source file while also remaining immutably pinned.
+
+6. **Documentation is not ready to drive Codex.**
+
+   Confirmed examples:
+
+   - Workflows `README.md` does not list doc-metadata in its reusable-workflow table.
+   - Sync documentation still describes `.github/sync-config/`, conflicting with the current caller wrapper.
+   - Current doc-metadata documentation describes current output forms containing `Changes:` and unquoted current links that conflict with the approved future canonical format.
+   - Documentation still presents `documentEligibility` as supported configuration.
+   - Workflows and template doc-metadata documentation have diverged.
+   - Planned, current, and historical behavior are not consistently labelled.
+
+7. **The PowerShell acceptance harness is not execution-safe.**  
+   `Invoke-Process` drains stdout and stderr sequentially and calls unbounded `WaitForExit()`. This can hang on a full redirected pipe and has no finite child-process timeout.
+
+8. **Manifest governance is overly broad and duplicated.**  
+   The current Workflows doc-metadata manifest contains both:
+
+   - an independent `documentEligibility` policy layer; and
+   - a repository-wide `**/*.txt` include.
+
+   Approved behavior is include-minus-exclude selection, with explicitly included unprocessable files failing clearly.
+
+9. **Cross-engine ownership is unresolved.**  
+   Active external `enforce` ownership can cause sync/doc-metadata ping-pong. Canonical version authority must be derived from sync authority before caller migration.
+
+10. **Self-canonical entries are not explicitly classified.**  
+    Exact same-repository, same-ref, same-source-path, same-target-path operations must be recognized as canonical no-ops. Same-repository different-path copies remain real sync operations.
+
+11. **No release/install/upgrade contract exists.**  
+    There is no approved model tying together:
+
+    - reusable workflow commit;
+    - generated wrapper pin;
+    - copied schema;
+    - copied documentation;
+    - default manifest version;
+    - managed sync entries;
+    - package upgrade PR.
+
+12. **Current static and historical evidence is not a fresh executable baseline.**  
+    The complete PowerShell acceptance suite and parser validation must be rerun after harness stabilization. Generic YAML parsing is not GitHub Actions semantic validation.
+
+## 4. Approved architecture
+
+### 4.1 Repository roles
+
+`BionicCode/workflows` owns:
+
+- the only active doc-metadata engine;
+- the reusable doc-metadata workflow;
+- engine tests;
+- authoritative schema;
+- authoritative engine, manifest, API, and type documentation;
+- package templates and installer logic;
+- sync engine, sync schema, tests, and documentation;
+- ownership-plan contract and generator.
+
+Each caller repository owns:
+
+- the event-triggering top-level orchestration;
+- execution permissions;
+- caller-specific manifests;
+- repository-specific policy and examples;
+- a generated thin local wrapper;
+- local copied schema and documentation for discoverability/editor support.
+
+Workflows never discovers or broadcasts to descendants. A caller explicitly invokes initialization, upgrade, metadata maintenance, or synchronization.
+
+### 4.2 True reusable doc-metadata workflow
+
+The authoritative reusable workflow must be callable as:
+
+```yaml
+uses: BionicCode/workflows/.github/workflows/doc-metadata.yml@<full-commit-sha>
+```
+
+The called workflow executes in caller context but checks out its implementation from:
+
+```yaml
+repository: ${{ job.workflow_repository }}
+ref: ${{ job.workflow_sha }}
+```
+
+It separately checks out:
+
+- trusted caller base/default state;
+- caller working PR head or branch state.
+
+No executable engine script may be loaded from an untrusted PR head.
+
+### 4.3 Thin local wrapper
+
+Initialization installs a small local wrapper, for example:
+
+```text
+.github/workflows/doc-metadata.yml
+```
+
+The wrapper:
+
+- contains no engine logic;
+- contains a generated notice;
+- forwards the approved input/secret contract;
+- calls the Workflows reusable workflow at a literal full SHA;
+- is installer-managed and not manually edited.
+
+The local top-level orchestrator calls this wrapper through:
+
+```yaml
+uses: ./.github/workflows/doc-metadata.yml
+```
+
+This preserves a stable local interface while keeping one implementation authority.
+
+### 4.4 Installation and upgrade model
+
+The Workflows repository must expose a reusable repository-tool installer with an explicit `init` command. The exact filename may be selected in Plan Mode, but the public contract must distinguish:
+
+```text
+command=init
+command=upgrade
+command=validate-installation
+```
+
+`init` and `upgrade` create or update one reviewable caller PR.
+
+The installer must render the exact called Workflows commit SHA into the thin wrapper. Re-running the installer at a newer SHA is the controlled upgrade mechanism.
+
+The initializer installs or updates, as one coherent package version:
+
+- generated thin wrapper;
+- caller-owned default doc-metadata manifest when missing;
+- local schema copy;
+- local human documentation;
+- package metadata needed for validation;
+- structurally managed sync-manifest entries where applicable.
+
+It must not copy:
+
+- the PowerShell engine;
+- the resolver engine;
+- engine tests;
+- another full reusable workflow implementation.
+
+### 4.5 Package ownership and lifecycle
+
+| Installed surface | Ownership/lifecycle |
+|---|---|
+| Thin wrapper with literal Workflows SHA | installer-managed generated file |
+| Authoritative schema copy | package-managed; must match wrapper engine commit |
+| Authoritative documentation copy | package-managed; must match wrapper engine commit |
+| Default caller doc-metadata manifest | `seed_once`; caller-owned after creation |
+| Caller-specific examples/configuration | caller-owned |
+| PowerShell engine/tests | never copied |
+
+Schema and documentation must never update independently to a newer engine contract while the wrapper still pins an older engine.
+
+### 4.6 Sync/version authority
+
+The ownership plan is generated only by sync logic and consumed by doc-metadata as a closed, versioned contract.
+
+Doc-metadata must not parse sync marker semantics or reinterpret the sync manifest.
+
+Version authority:
+
+| Sync classification | Canonical version authority | Target doc-metadata |
+|---|---|---|
+| External source + `enforce` | source repository | skip entire file |
+| Exact self-canonical `enforce` no-op | current repository | allowed |
+| `seed_once`, target missing | source for creation | reserve until created |
+| `seed_once`, target exists | target repository | allowed |
+| `disabled` | target/no active sync authority | allowed |
+
+For the first viable product:
+
+- a descendant `AGENTS.md` with repository-specific marker content is skipped by doc-metadata when the canonical source has active external `enforce` authority;
+- local marker edits remain represented by Git history;
+- `Version` represents the canonical source document revision;
+- no separate local-overlay version is created;
+- `Version` is never merge priority.
+
+### 4.7 Manifest governance
+
+Approved public formula:
+
+```text
+governedFiles = files matching include minus files matching exclude
+```
+
+Rules:
+
+- no include match means not governed;
+- exclude subtracts from include;
+- presentation settings do not determine governance;
+- remove `documentEligibility`;
+- explicitly included unsupported, binary/NUL-containing, or invalid-UTF-8 files fail clearly;
+- remove repository-wide `**/*.txt`;
+- critical files should be explicit;
+- globs are appropriate only for directories intentionally dedicated to governed documentation.
+
+### 4.8 Documentation is a product contract
+
+Every behavior pass is incomplete unless implementation, tests, schema, manifests, examples, and human documentation agree.
+
+Required documentation layers:
+
+1. workflow overview/README;
+2. manifest tutorial and recipes;
+3. manifest API reference;
+4. individual type/property reference;
+5. architecture/design decisions for non-obvious conventions.
+
+Documentation must explain reasons and conventions, including:
+
+- caller authority versus definition authority;
+- source-to-target only;
+- source configuration, not inferred ancestry, establishes authority;
+- canonical version ownership;
+- `enforce` versus `seed_once`;
+- marker ownership;
+- exact self-canonical no-op;
+- why wrapper pin upgrades are explicit;
+- why `Version` is not conflict resolution;
+- why local overlay edits do not increment a canonical source version.
+
+Use GitHub callouts and human-oriented examples. Do not expose implementation internals as a substitute for conceptual documentation.
+
+## 5. Session separation
+
+### Session A — Workflows implementation
+
+Writable repository:
+
+```text
+BionicCode/workflows
+```
+
+No template-repository implementation files may be changed during this session.
+
+Session A must deliver:
+
+- authoritative reusable doc-metadata engine;
+- safe harness and fresh tests;
+- package-aware initializer/upgrader;
+- generated thin wrapper template/renderer;
+- sync ownership plan;
+- canonical version authority enforcement;
+- exact self-canonical no-op;
+- corrected manifest governance;
+- canonical links and tamper evidence;
+- current authoritative documentation;
+- a tested immutable Workflows release candidate SHA.
+
+### Session B — Template caller migration
+
+Writable repository:
+
+```text
+BionicCode/template-visual-studio-repository
+```
+
+Session B cannot start until the Session A release gate is accepted and records an exact Workflows commit SHA.
+
+Session B must:
+
+- run the approved initializer/upgrade against the template caller;
+- install the generated wrapper and package surfaces;
+- preserve caller-owned manifest policy;
+- switch orchestration to the wrapper;
+- prove parity and convergence;
+- remove duplicated engine/test files only after proof;
+- clean stale automation PR state;
+- leave a short pointer to the authoritative Workflows backlog/protocol.
+
+Do not mix Workflows engine changes into Session B. A defect in the shared engine reopens a bounded Workflows pass and produces a new release candidate SHA before migration resumes.
+
+## 6. Ordered roadmap
+
+The order below is mandatory.
+
+# Session A — `BionicCode/workflows`
+
+## W0 — Adopt authoritative coordination files
+
+**Goal:** create the authoritative recovery backlog and review protocol in Workflows.
+
+**Allowed files:**
+
+- `repository-maintenance-orchestrator-recovery-backlog.md`
+- `repository-review-protocol.md`
+
+**Out of scope:** all `.github/**` implementation and documentation files.
+
+**Validation:**
+
+- exactly two files changed;
+- no competing active roadmap exists in Workflows;
+- current state is clearly distinguished from approved future state;
+- links and Markdown render correctly;
+- `git diff --check`.
+
+**Review gate:** maintainer approves exact two-file diff.
+
+---
+
+## W1 — Documentation authority and current-state audit
+
+**Mode:** review-only.
+
+**Goal:** inventory every potentially normative Markdown file in Workflows and classify it as:
+
+- current normative guidance;
+- current product documentation;
+- copied/generated documentation;
+- historical evidence;
+- planned behavior;
+- stale/contradictory;
+- non-normative background.
+
+**Required review scope:**
+
+- root `README.md`;
+- `AGENTS.md`;
+- workflow documentation;
+- doc-metadata documentation tree;
+- sync documentation tree;
+- schema-linked references;
+- examples and templates.
+
+**Output:** dated audit table with file, authority, implementation match, contradictions, and required owning pass.
+
+**Stop condition:** repository HEAD changes.
+
+---
+
+## W2 — Stabilize current-state documentation before Codex implementation
+
+**Goal:** remove or quarantine documentation that could cause Codex to implement stale behavior.
+
+**Allowed files:** only files approved from W1.
+
+**Rules:**
+
+- describe only current behavior;
+- label planned behavior explicitly;
+- do not document an unimplemented callable-authority architecture as current;
+- do not edit copied documentation independently of its authority;
+- add human-oriented callouts and concepts where missing.
+
+**Review gate:** reading all applicable Markdown cannot reasonably cause current/planned behavior confusion.
+
+---
+
+## W3 — Contain broken Workflows self-orchestration
+
+**Goal:** eliminate the missing local sync-workflow call and autonomous source-side schedule.
+
+**Expected file:**
+
+- `.github/workflows/repository-maintenance.yml`
+
+**Required behavior:**
+
+- no call to absent `.github/workflows/sync-managed-files.yml`;
+- no source-side sync broadcast;
+- no schedule;
+- local self-maintenance only;
+- default branch derived from repository context;
+- repair-branch recursion guard preserved.
+
+This pass may temporarily retain the current local doc-metadata call until W6 replaces it with the authoritative local reusable path.
+
+**Validation:**
+
+- YAML parse;
+- `actionlint` or equivalent;
+- exact trigger/job matrix;
+- live expected run;
+- no zero-job scheduled run.
+
+---
+
+## W4 — Stabilize the PowerShell acceptance harness
+
+**Goal:** make tests bounded and deadlock-resistant without changing product assertions.
+
+**Allowed file:**
+
+- `.github/scripts/doc-metadata/tests/Invoke-DocMetadataAcceptanceTests.ps1`
+
+**Required behavior:**
+
+- concurrent stdout/stderr draining;
+- finite per-process timeout;
+- process-tree termination where supported;
+- START/PASS/FAIL output;
+- timeout diagnostics;
+- cleanup in `finally`;
+- high-output deadlock witness;
+- intentional timeout witness.
+
+**Validation:**
+
+- PowerShell parser;
+- harness self-tests;
+- complete suite twice;
+- no production file changed.
+
+---
+
+## W5 — Establish fresh executable baseline
+
+**Mode:** validation-only.
+
+Required:
+
+```text
+PowerShell parser for all doc-metadata scripts
+doc-metadata acceptance suite twice
+sync Python unit suite
+JSON Schema validation
+YAML parse
+actionlint or equivalent
+Markdown relative-link validation
+git diff --check
+```
+
+Record runtime versions and exact commit.
+
+Any failure becomes a separate bounded pass. Historical green runs do not replace this gate.
+
+---
+
+## W6 — Approve the reusable workflow and package contract
+
+**Mode:** Plan Mode.
+
+Must specify:
+
+- public reusable workflow filename;
+- stable caller inputs, secrets, outputs, and permissions;
+- caller/base/head checkout matrix;
+- Workflows self-checkout through `job.workflow_repository`/`job.workflow_sha`;
+- fork behavior;
+- repair branch behavior;
+- local Workflows self-call;
+- wrapper schema and generated notice;
+- literal SHA rendering;
+- package file list;
+- canonical caller paths;
+- init/upgrade/validate commands;
+- package version identity;
+- manifest structural merge rules;
+- conflicts and rollback;
+- documentation layout;
+- release candidate process.
+
+**Critical decision:** approve one canonical sync configuration path. The current `.github/sync-config` versus `.github/tools/sync-config` mismatch must end here.
+
+---
+
+## W7 — Convert doc-metadata into the authoritative reusable engine
+
+**Goal:** make Workflows the only executable engine authority.
+
+**Expected files:**
+
+- `.github/workflows/doc-metadata.yml`
+- `.github/workflows/repository-maintenance.yml` only for final local self-call
+- `.github/scripts/doc-metadata/**`
+- `.github/tools/doc-metadata/**`
+- focused docs and tests required by the public contract
+
+**Required behavior:**
+
+- reusable workflow obtains engine from `job.workflow_repository` and `job.workflow_sha`;
+- caller trusted and working trees are separate;
+- no caller-local engine script is executed;
+- caller `github` context and token authority remain intact;
+- permissions cannot be elevated;
+- Workflows local self-maintenance calls the same authoritative implementation;
+- public interface is closed and documented;
+- workflow dispatch behavior is either removed from the reusable engine or explicitly separated into a local top-level caller.
+
+**Validation:**
+
+- full PowerShell suite twice;
+- caller checkout fixture matrix;
+- fork read-only case;
+- same-repository repair case;
+- branch/push/manual cases;
+- workflow semantic lint;
+- live Workflows self-call.
+
+---
+
+## W8 — Implement package-aware init/upgrade
+
+**Goal:** install a coherent doc-metadata caller package through an explicit init command.
+
+**Expected surfaces:**
+
+- reusable installer workflow;
+- package renderer/installer script;
+- wrapper template;
+- package tests;
+- sync-init path corrections;
+- authoritative installation documentation.
+
+**Required installer behavior:**
+
+- `init`, `upgrade`, and `validate-installation`;
+- checks out caller and exact Workflows implementation commit;
+- renders literal `job.workflow_sha` into wrapper;
+- creates one PR;
+- preserves caller-owned manifest when present;
+- creates default doc manifest only when missing;
+- installs matching schema/docs;
+- structurally creates or updates approved sync entries;
+- preserves unrelated caller sync entries;
+- rejects conflicting managed entries;
+- idempotent second run is no-op;
+- upgrade from SHA A to SHA B changes all package surfaces coherently;
+- never copies engine or tests;
+- never silently writes directly to protected default branch.
+
+**Important:** the wrapper is installer-managed, not ordinary byte-for-byte sync content. Schema/docs entries must remain tied to the same pinned package SHA.
+
+---
+
+## W9 — Implement one shared sync authority classifier
+
+**Goal:** produce neutral ownership/version-authority facts from the same semantics used by sync execution.
+
+**Required facts per expanded target:**
+
+- source repository/ref/path;
+- target path;
+- lifecycle policy;
+- declared managed scope;
+- target-exists state when relevant;
+- exact-self-canonical state;
+- write authority;
+- version authority.
+
+**Required lifecycle classification:**
+
+```text
+external enforce           -> continuous external authority
+self-canonical enforce     -> no-op/current repository authority
+seed_once target absent    -> create-if-missing
+seed_once target exists    -> no active write authority
+disabled                   -> no active write authority
+```
+
+The classifier must reuse normalization, source-glob expansion, duplicate detection, and path safety. It must not create a parallel interpretation.
+
+---
+
+## W10 — Make sync execution consume the classifier
+
+**Goal:** prevent planner/executor disagreement.
+
+**Required behavior:**
+
+- exact self-canonical operations are no-op;
+- same repository but different source/target path remains real sync;
+- verify and sync consume classifier facts;
+- duplicate/generated-target behavior unchanged unless explicitly approved;
+- no write begins before complete plan succeeds.
+
+**Validation:** full sync suite plus exact self/no-op matrix.
+
+---
+
+## W11 — Expose the read-only ownership plan
+
+**Goal:** publish a closed, versioned plan for doc-metadata.
+
+**Contract must include:**
+
+- schema version;
+- generator repository and commit;
+- caller repository and exact target SHA;
+- manifest path and digest;
+- completeness;
+- sorted unique targets;
+- neutral authority facts;
+- no secrets or source content.
+
+**Failure must be closed for:**
+
+- missing/invalid manifest where plan is required;
+- unsupported version;
+- wrong caller/SHA/digest;
+- duplicate target;
+- source tree truncation;
+- unavailable private source;
+- oversized output;
+- incomplete plan.
+
+Plan and actual sync must use the same Workflows commit.
+
+---
+
+## W12 — Enforce exclusive canonical version authority
+
+**Goal:** doc-metadata consumes only the ownership-plan contract.
+
+**Required behavior:**
+
+- external `enforce` target: skip entire file;
+- self-canonical `enforce`: allow;
+- existing `seed_once`: allow;
+- missing `seed_once`: reserve;
+- disabled: allow normal doc governance;
+- stale/missing/invalid required plan: fail before writes;
+- separate report category for canonical-source authority;
+- no marker parsing in doc-metadata;
+- no second blacklist manifest.
+
+**Required documentation:**
+
+- source owns canonical version under external `enforce`;
+- local marker content may remain editable while canonical version stays source-owned;
+- Git history records local overlay changes;
+- no local-overlay version in v1;
+- version is not merge priority.
+
+---
+
+## W13 — Prove cross-engine convergence in fixtures
+
+Run twice:
+
+```text
+ownership plan
+doc-metadata Analyze
+doc-metadata Update when required
+doc-metadata Check
+sync verify/sync plan
+repeat
+```
+
+Witnesses:
+
+- external whole-file enforce;
+- external inside/outside-marker enforce;
+- exact self-canonical entry;
+- existing/missing seed_once;
+- disabled;
+- unowned document;
+- invalid/stale plan.
+
+Second pass must be no-op.
+
+---
+
+## W14 — Correct manifest governance
+
+**Goal:** implement include-minus-exclude and remove `documentEligibility`.
+
+Implementation, schema, default manifest, tests, examples, API/type docs, and migration diagnostics are one pass.
+
+Remove broad `**/*.txt`. Explicitly included unprocessable files fail clearly.
+
+---
+
+## W15 — Canonical links
+
+Implement and document:
+
+```markdown
+> [<b>View Changes</b>](...)
+> [<b>View Commit</b>](...)
+
+- Updated: <b>...</b> | Author: <b>...</b> | [<b>View Changes</b>](...)
+- Updated: <b>...</b> | Author: <b>...</b> | [<b>View Commit</b>](...)
+```
+
+No generated `Changes:` label. No guessed unavailable history.
+
+---
+
+## W16 — Complete protected-field tamper coverage
+
+Isolated cases:
+
+- Version;
+- Created;
+- Updated;
+- Author;
+- current link;
+- generated history/presentation;
+- mixed tamper;
+- tamper plus body change;
+- PR/push/manual;
+- authority-skipped file untouched.
+
+Production changes require a failing test witness.
+
+---
+
+## W17 — Workflows release-candidate certification
+
+**Goal:** produce the exact immutable SHA allowed for caller migration.
+
+Required:
+
+- all PowerShell and Python suites pass twice where required;
+- package init, no-op re-init, and upgrade fixtures;
+- generated wrapper YAML/actionlint;
+- literal SHA equals release candidate;
+- schema/docs/default manifest match engine contract;
+- local Workflows self-maintenance passes;
+- ownership convergence fixtures pass twice;
+- static security and permissions review;
+- complete diff review;
+- authoritative docs current.
+
+Record:
+
+```text
+WORKFLOWS_RELEASE_CANDIDATE_SHA=<40-character SHA>
+```
+
+### External-caller limitation
+
+A pure Workflows test cannot prove every cross-repository permission and repair behavior. Session B begins with a non-destructive integration branch and parity gate. If that gate finds a shared-engine defect, migration stops and a bounded Workflows fix produces a new release candidate.
+
+# Session B — `BionicCode/template-visual-studio-repository`
+
+## T0 — Resolve and quarantine caller documentation
+
+Review current caller HEAD, old backlog/protocol, copied docs, local engine docs, and open PRs.
+
+Replace the old active full roadmap with:
+
+- a pointer to the authoritative Workflows backlog;
+- template-specific migration status only.
+
+No implementation yet.
+
+---
+
+## T1 — Run package init/upgrade on a migration branch
+
+Use the exact W17 SHA.
+
+Expected PR changes:
+
+- generated thin wrapper;
+- local schema/docs at matching package version;
+- preserved or initialized caller doc manifest;
+- structurally updated sync manifest entries;
+- package metadata/validation surfaces.
+
+No old engine deletion yet.
+
+Validate idempotent second installer run.
+
+---
+
+## T2 — Shared-versus-local parity gate
+
+Run old local engine and new shared engine against identical fixtures and repository states without allowing both to publish repairs.
+
+Compare:
+
+- analyze report;
+- changed-file set;
+- updated bytes;
+- diagnostics;
+- link map behavior;
+- post-check result.
+
+Differences require explicit classification. Unexpected shared-engine differences reopen Workflows.
+
+---
+
+## T3 — Switch orchestration to the thin wrapper
+
+**Goal:** make the shared engine authoritative in the caller.
+
+Required:
+
+- top-level orchestrator calls local thin wrapper;
+- wrapper pins exact W17 SHA;
+- ownership plan precedes doc-metadata;
+- sync uses same Workflows SHA;
+- no intermediate merge that exposes partial integration;
+- PR/push/manual/fork matrix passes.
+
+---
+
+## T4 — Prove live caller convergence
+
+Use isolated branches/fixtures and run the complete sequence twice.
+
+No second-pass PR or reversal is allowed.
+
+Do not merge PR #34 or PR #35.
+
+---
+
+## T5 — Remove duplicated caller engine
+
+Only after T2–T4 acceptance, remove caller copies of:
+
+- PowerShell engine;
+- resolver engine;
+- engine acceptance tests;
+- full local reusable implementation no longer needed.
+
+Retain:
+
+- thin wrapper;
+- caller manifest;
+- schema/docs package copies;
+- caller orchestration;
+- caller-specific documentation.
+
+Preserve old implementation through Git history, not an obsolete-code folder.
+
+---
+
+## T6 — Clean stale automation state
+
+After convergence:
+
+- close/supersede PR #34 and PR #35 with preserved evidence;
+- regenerate fresh automation evidence;
+- verify clean current PRs;
+- update evidence ledger.
+
+No automated merge is authorized.
+
+## 7. Deferred post-recovery design
+
+### F1 — Single-boundary marker support
+
+Allow one physical marker with virtual BOF/EOF boundary. Requires schema, parser, composition, migration, tests, and human docs.
+
+Do not make recovery depend on it.
+
+### F2 — Hierarchical manifest imports and provenance
+
+Design schema-level policy imports with declaring-repository provenance, cycle detection, depth limits, duplicate conflict handling, and A→B→C diagnostics.
+
+Do not implement raw textual fences inside JSON.
+
+### F3 — Performance and dependency hardening
+
+Only after correctness:
+
+- immutable action references;
+- measured checkout depth changes;
+- dependency warning remediation;
+- plan-size measurement;
+- caching only with demonstrated reusable output;
+- one optimization per pass.
+
+## 8. Completion definition
+
+Recovery is complete only when:
+
+- Workflows contains one authoritative doc-metadata engine;
+- callers contain no copied engine/tests;
+- initializer installs a coherent pinned package;
+- schema/docs/wrapper share one package identity;
+- Workflows remains passive;
+- ownership plan and sync share one classifier and commit;
+- canonical version authority prevents ping-pong;
+- two complete passes converge to no-op;
+- manifest governance, links, and tamper behavior match approved contracts;
+- documentation is human-readable, current, and structurally complete;
+- exact final SHAs and run evidence are recorded;
+- stale automation PRs are resolved.
+
+## 9. Evidence ledger
+
+| Pass | Status | Base SHA | Result SHA/PR | Tests/runs | Reviewer |
+|---|---|---|---|---|---|
+| W0 | Pending | `fbdd7ff…` |  |  |  |
+| W1 | Locked |  |  |  |  |
+| W2 | Locked |  |  |  |  |
+| W3 | Locked |  |  |  |  |
+| W4 | Locked |  |  |  |  |
+| W5 | Locked |  |  |  |  |
+| W6 | Locked |  |  |  |  |
+| W7 | Locked |  |  |  |  |
+| W8 | Locked |  |  |  |  |
+| W9 | Locked |  |  |  |  |
+| W10 | Locked |  |  |  |  |
+| W11 | Locked |  |  |  |  |
+| W12 | Locked |  |  |  |  |
+| W13 | Locked |  |  |  |  |
+| W14 | Locked |  |  |  |  |
+| W15 | Locked |  |  |  |  |
+| W16 | Locked |  |  |  |  |
+| W17 | Locked |  |  |  |  |
+| T0–T6 | Locked | target `dd569d77…` |  |  |  |
