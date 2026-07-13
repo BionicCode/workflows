@@ -406,6 +406,22 @@ The order below is mandatory.
 
 Checkbox convention: an unchecked box means the pass is open; tick it only after its review gate has been accepted and the evidence ledger has been updated.
 
+### Status ownership
+
+All pass-completion checkboxes and the evidence ledger are maintainer-controlled review state.
+
+Coding agents must not:
+
+* check or uncheck pass-completion boxes;
+* change a pass from `Pending` or `Locked` to another status;
+* record a pass as accepted, complete, or reviewed;
+* update the evidence ledger;
+* unlock a later pass.
+
+An agent may propose the exact status and evidence updates in its final handoff, but it must not apply them unless the current user prompt explicitly authorizes modification of this backlog for that coordination-only purpose.
+
+Passing tests, completing an implementation, or performing an agent self-review does not authorize a backlog status change. The maintainer updates status only after independently reviewing and accepting the pass.
+
 # Session A — `BionicCode/workflows`
 
 ## W0 — Adopt authoritative coordination files
