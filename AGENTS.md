@@ -399,11 +399,10 @@ Only the maintainer may mark backlog passes complete, update the evidence ledger
 When `AGENTS.md` modification is explicitly authorized, preserve the shared protected section and modify only `REPOSITORY SPECIFICS` unless the user explicitly authorizes a change to the shared baseline.
 
 ## Solution and Structure
-- Primary solution name: `<SolutionName>`
-- Source root(s): `src/`
-- Test root: `test/`
-- Unit test project name: `<SolutionName>.Tests`
-- Documentation location: `docs/`
+Primary solution: Not applicable; this is a reusable-workflow and automation repository.
+Source roots: .github/workflows/ and .github/scripts/
+Test roots: tool-specific tests below .github/scripts/
+Documentation: root README.md and tool-owned documentation directories; authoritative locations are classified by backlog pass W1.
 
 ## Build and Validation
 - Preferred restore command: `<fill me>`
