@@ -342,12 +342,67 @@ Keep the report concise, task-specific, and evidence-based. Do not replace it wi
 
 Fill in or edit this section per repository. Everything above this section is intended to remain stable across repositories.
 
+## Implementation-pass review handoff
+
+For every completed implementation pass defined by `repository-maintenance-orchestrator-recovery-backlog.md`, produce a self-contained review handoff.
+
+The handoff must contain:
+
+* the backlog pass identifier and task goal;
+* the exact repository, base branch, base commit SHA, and resulting working-tree or commit state;
+* the premises, approved design decisions, and conventions used;
+* the implementation summary and rationale;
+* externally visible behavior and behavior intentionally left unchanged;
+* the complete changed-file list;
+* validation commands, runtime versions, and results;
+* tests added or changed and the external contract each test proves;
+* documentation, schema, manifest, configuration, example, and migration assessment;
+* security, permission, trust, ownership, concurrency, idempotence, and rollback review where relevant;
+* unverified paths, environment limitations, assumptions, and remaining risks;
+* confirmation of whether any stop condition occurred;
+* all Git and GitHub actions performed;
+* a suggested commit subject and, when useful, an optional commit body;
+* the exact next backlog pass unlocked, or an explicit statement that no later pass is unlocked.
+
+Do not stage, commit, push, create or update a pull request, merge, dispatch workflows, or modify repository settings unless the user explicitly authorizes that exact action.
+
+Create or update a repository Markdown handoff file only when the current task explicitly authorizes its path. A backlog requirement alone does not expand the task’s writable file scope.
+
+When no repository handoff file is authorized, return the complete handoff in the final response and state that no persistent handoff artifact was created.
+
+Do not claim completion based solely on passing tests. Review the complete diff against the pass contract, repository instructions, public behavior, documentation, schema, configuration, and stop conditions before declaring the pass complete.
+
+## Protected repository control plane
+
+The following files are read-only unless the current user request explicitly names and authorizes the exact path:
+
+* `AGENTS.md` and all nested `AGENTS.md` or `AGENTS.override.md` files;
+* `AGENT_GUARDRAILS.md`;
+* `.github/copilot-instructions.md`;
+* `.github/instructions/**/*.instructions.md`;
+* `DOCUMENTATION.md`;
+* `repository-maintenance-orchestrator-recovery-backlog.md`;
+* `repository-review-protocol.md`;
+* `.github/CODEOWNERS`, when present.
+
+Do not modify these files merely to keep them consistent with an implementation, documentation move, renamed directory, changed workflow, completed backlog pass, or updated test result.
+
+If a task makes one of these files inaccurate:
+
+1. do not edit it;
+2. report the conflict in the final handoff;
+3. provide the proposed correction;
+4. state whether a separate governance update is required.
+
+Only the maintainer may mark backlog passes complete, update the evidence ledger, or unlock later passes, unless the current prompt explicitly authorizes a coordination-only update to those exact files.
+
+When `AGENTS.md` modification is explicitly authorized, preserve the shared protected section and modify only `REPOSITORY SPECIFICS` unless the user explicitly authorizes a change to the shared baseline.
+
 ## Solution and Structure
-- Primary solution name: `<SolutionName>`
-- Source root(s): `src/`
-- Test root: `test/`
-- Unit test project name: `<SolutionName>.Tests`
-- Documentation location: `docs/`
+Primary solution: Not applicable; this is a reusable-workflow and automation repository.
+Source roots: .github/workflows/ and .github/scripts/
+Test roots: tool-specific tests below .github/scripts/
+Documentation: root README.md and tool-owned documentation directories; authoritative locations are classified by backlog pass W1.
 
 ## Build and Validation
 - Preferred restore command: `<fill me>`
