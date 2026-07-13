@@ -428,20 +428,21 @@ Passing tests, completing an implementation, or performing an agent self-review 
 
 - [ ] **Completed**
 
-**Goal:** create the authoritative recovery backlog and review protocol in Workflows.
+**Goal:** adopt the authoritative recovery backlog and review protocol, and establish the repository-specific implementation-handoff and protected-control-plane rules.
 
 **Allowed files:**
 
+- `AGENTS.md`
 - `repository-maintenance-orchestrator-recovery-backlog.md`
 - `repository-review-protocol.md`
 
-**Out of scope:** all `.github/**` implementation and documentation files.
-
 **Validation:**
 
-- exactly two files changed;
+- exactly three files changed;
+- changes to `AGENTS.md` are limited to `REPOSITORY SPECIFICS`;
 - no competing active roadmap exists in Workflows;
 - current state is clearly distinguished from approved future state;
+- protected control-plane and maintainer-only status rules are consistent across all three files;
 - links and Markdown render correctly;
 - `git diff --check`.
 
