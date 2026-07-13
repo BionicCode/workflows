@@ -1080,9 +1080,9 @@ Recovery is complete only when:
 
 ## 9. Evidence ledger
 
-| Pass | Status | Base SHA | Result SHA | PR | Ledger closure SHA | Tests/runs | Reviewer |
+| Pass | Status | Base SHA | Result SHA | PR # | Ledger closure SHA | Tests/runs | Reviewer |
 |---|---|---|---|---|---|---|---|
-| W0 | Completed | `a64ef89537304f81466acfcbdd63a187fe74ce51` | `ed8b11288b89a5f0aca2c1551e2d8bdb1606c8a8` | #4 | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` | Three-file scope review; Markdown/link checks; `git diff --check` | BionicCode |
+| W0 | Completed | `a64ef89537304f81466acfcbdd63a187fe74ce51` | `ed8b11288b89a5f0aca2c1551e2d8bdb1606c8a8` | 4 | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` | Three-file scope review; Markdown/link checks; `git diff --check` | BionicCode |
 | W1 | Pending | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` |  |  |  |  |  |
 | W2 | Locked |  |  |  |  |  |  |
 | W2 | Locked |  |  |  |  |  |  |
