@@ -434,3 +434,35 @@ A pass completes only when:
 - backlog evidence ledger is updated.
 
 Unavailable evidence remains explicitly unverified.
+
+## 20. Protected control-plane files
+
+The following files are read-only by default because they define agent behavior, review authority, repository policy, or roadmap state:
+
+* root and nested `AGENTS.md`;
+* root and nested `AGENTS.override.md`;
+* `AGENT_GUARDRAILS.md`;
+* `.github/copilot-instructions.md`;
+* `.github/instructions/**/*.instructions.md`;
+* root `DOCUMENTATION.md` when it defines mandatory documentation policy;
+* `repository-maintenance-orchestrator-recovery-backlog.md`;
+* `repository-review-protocol.md`;
+* `.github/CODEOWNERS`, when present.
+
+A task may modify one of these files only when the current user prompt:
+
+1. names the exact file path;
+2. explicitly authorizes that file to be changed;
+3. states the intended governance or coordination change.
+
+Broad instructions such as “update documentation,” “update all references,” “keep documentation consistent,” or “complete the backlog pass” do not authorize modification of protected control-plane files.
+
+When implementation makes a protected file inaccurate, the agent must:
+
+* leave the protected file unchanged;
+* report the exact inconsistency;
+* identify the affected path and section;
+* propose the required wording in the final handoff;
+* stop if continuing would make repository instructions materially contradictory.
+
+Backlog checkboxes, evidence records, pass statuses, and pass unlocking remain maintainer-controlled even when the implementation itself is complete.

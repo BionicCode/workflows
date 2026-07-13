@@ -372,6 +372,32 @@ When no repository handoff file is authorized, return the complete handoff in th
 
 Do not claim completion based solely on passing tests. Review the complete diff against the pass contract, repository instructions, public behavior, documentation, schema, configuration, and stop conditions before declaring the pass complete.
 
+## Protected repository control plane
+
+The following files are read-only unless the current user request explicitly names and authorizes the exact path:
+
+* `AGENTS.md` and all nested `AGENTS.md` or `AGENTS.override.md` files;
+* `AGENT_GUARDRAILS.md`;
+* `.github/copilot-instructions.md`;
+* `.github/instructions/**/*.instructions.md`;
+* `DOCUMENTATION.md`;
+* `repository-maintenance-orchestrator-recovery-backlog.md`;
+* `repository-review-protocol.md`;
+* `.github/CODEOWNERS`, when present.
+
+Do not modify these files merely to keep them consistent with an implementation, documentation move, renamed directory, changed workflow, completed backlog pass, or updated test result.
+
+If a task makes one of these files inaccurate:
+
+1. do not edit it;
+2. report the conflict in the final handoff;
+3. provide the proposed correction;
+4. state whether a separate governance update is required.
+
+Only the maintainer may mark backlog passes complete, update the evidence ledger, or unlock later passes, unless the current prompt explicitly authorizes a coordination-only update to those exact files.
+
+When `AGENTS.md` modification is explicitly authorized, preserve the shared protected section and modify only `REPOSITORY SPECIFICS` unless the user explicitly authorizes a change to the shared baseline.
+
 ## Solution and Structure
 - Primary solution name: `<SolutionName>`
 - Source root(s): `src/`
