@@ -404,9 +404,13 @@ Do not mix Workflows engine changes into Session B. A defect in the shared engin
 
 The order below is mandatory.
 
+Checkbox convention: an unchecked box means the pass is open; tick it only after its review gate has been accepted and the evidence ledger has been updated.
+
 # Session A — `BionicCode/workflows`
 
 ## W0 — Adopt authoritative coordination files
+
+- [ ] **Completed**
 
 **Goal:** create the authoritative recovery backlog and review protocol in Workflows.
 
@@ -430,6 +434,8 @@ The order below is mandatory.
 ---
 
 ## W1 — Documentation authority and current-state audit
+
+- [ ] **Completed**
 
 **Mode:** review-only.
 
@@ -461,6 +467,8 @@ The order below is mandatory.
 
 ## W2 — Stabilize current-state documentation before Codex implementation
 
+- [ ] **Completed**
+
 **Goal:** remove or quarantine documentation that could cause Codex to implement stale behavior.
 
 **Allowed files:** only files approved from W1.
@@ -478,6 +486,8 @@ The order below is mandatory.
 ---
 
 ## W3 — Contain broken Workflows self-orchestration
+
+- [ ] **Completed**
 
 **Goal:** eliminate the missing local sync-workflow call and autonomous source-side schedule.
 
@@ -508,6 +518,8 @@ This pass may temporarily retain the current local doc-metadata call until W6 re
 
 ## W4 — Stabilize the PowerShell acceptance harness
 
+- [ ] **Completed**
+
 **Goal:** make tests bounded and deadlock-resistant without changing product assertions.
 
 **Allowed file:**
@@ -536,6 +548,8 @@ This pass may temporarily retain the current local doc-metadata call until W6 re
 
 ## W5 — Establish fresh executable baseline
 
+- [ ] **Completed**
+
 **Mode:** validation-only.
 
 Required:
@@ -558,6 +572,8 @@ Any failure becomes a separate bounded pass. Historical green runs do not replac
 ---
 
 ## W6 — Approve the reusable workflow and package contract
+
+- [ ] **Completed**
 
 **Mode:** Plan Mode.
 
@@ -586,6 +602,8 @@ Must specify:
 ---
 
 ## W7 — Convert doc-metadata into the authoritative reusable engine
+
+- [ ] **Completed**
 
 **Goal:** make Workflows the only executable engine authority.
 
@@ -622,6 +640,8 @@ Must specify:
 
 ## W8 — Implement package-aware init/upgrade
 
+- [ ] **Completed**
+
 **Goal:** install a coherent doc-metadata caller package through an explicit init command.
 
 **Expected surfaces:**
@@ -656,6 +676,8 @@ Must specify:
 
 ## W9 — Implement one shared sync authority classifier
 
+- [ ] **Completed**
+
 **Goal:** produce neutral ownership/version-authority facts from the same semantics used by sync execution.
 
 **Required facts per expanded target:**
@@ -685,6 +707,8 @@ The classifier must reuse normalization, source-glob expansion, duplicate detect
 
 ## W10 — Make sync execution consume the classifier
 
+- [ ] **Completed**
+
 **Goal:** prevent planner/executor disagreement.
 
 **Required behavior:**
@@ -700,6 +724,8 @@ The classifier must reuse normalization, source-glob expansion, duplicate detect
 ---
 
 ## W11 — Expose the read-only ownership plan
+
+- [ ] **Completed**
 
 **Goal:** publish a closed, versioned plan for doc-metadata.
 
@@ -731,6 +757,8 @@ Plan and actual sync must use the same Workflows commit.
 
 ## W12 — Enforce exclusive canonical version authority
 
+- [ ] **Completed**
+
 **Goal:** doc-metadata consumes only the ownership-plan contract.
 
 **Required behavior:**
@@ -756,6 +784,8 @@ Plan and actual sync must use the same Workflows commit.
 ---
 
 ## W13 — Prove cross-engine convergence in fixtures
+
+- [ ] **Completed**
 
 Run twice:
 
@@ -784,6 +814,8 @@ Second pass must be no-op.
 
 ## W14 — Correct manifest governance
 
+- [ ] **Completed**
+
 **Goal:** implement include-minus-exclude and remove `documentEligibility`.
 
 Implementation, schema, default manifest, tests, examples, API/type docs, and migration diagnostics are one pass.
@@ -793,6 +825,8 @@ Remove broad `**/*.txt`. Explicitly included unprocessable files fail clearly.
 ---
 
 ## W15 — Canonical links
+
+- [ ] **Completed**
 
 Implement and document:
 
@@ -809,6 +843,8 @@ No generated `Changes:` label. No guessed unavailable history.
 ---
 
 ## W16 — Complete protected-field tamper coverage
+
+- [ ] **Completed**
 
 Isolated cases:
 
@@ -828,6 +864,8 @@ Production changes require a failing test witness.
 ---
 
 ## W17 — Workflows release-candidate certification
+
+- [ ] **Completed**
 
 **Goal:** produce the exact immutable SHA allowed for caller migration.
 
@@ -858,6 +896,8 @@ A pure Workflows test cannot prove every cross-repository permission and repair 
 
 ## T0 — Resolve and quarantine caller documentation
 
+- [ ] **Completed**
+
 Review current caller HEAD, old backlog/protocol, copied docs, local engine docs, and open PRs.
 
 Replace the old active full roadmap with:
@@ -870,6 +910,8 @@ No implementation yet.
 ---
 
 ## T1 — Run package init/upgrade on a migration branch
+
+- [ ] **Completed**
 
 Use the exact W17 SHA.
 
@@ -889,6 +931,8 @@ Validate idempotent second installer run.
 
 ## T2 — Shared-versus-local parity gate
 
+- [ ] **Completed**
+
 Run old local engine and new shared engine against identical fixtures and repository states without allowing both to publish repairs.
 
 Compare:
@@ -906,6 +950,8 @@ Differences require explicit classification. Unexpected shared-engine difference
 
 ## T3 — Switch orchestration to the thin wrapper
 
+- [ ] **Completed**
+
 **Goal:** make the shared engine authoritative in the caller.
 
 Required:
@@ -921,6 +967,8 @@ Required:
 
 ## T4 — Prove live caller convergence
 
+- [ ] **Completed**
+
 Use isolated branches/fixtures and run the complete sequence twice.
 
 No second-pass PR or reversal is allowed.
@@ -930,6 +978,8 @@ Do not merge PR #34 or PR #35.
 ---
 
 ## T5 — Remove duplicated caller engine
+
+- [ ] **Completed**
 
 Only after T2–T4 acceptance, remove caller copies of:
 
@@ -952,6 +1002,8 @@ Preserve old implementation through Git history, not an obsolete-code folder.
 
 ## T6 — Clean stale automation state
 
+- [ ] **Completed**
+
 After convergence:
 
 - close/supersede PR #34 and PR #35 with preserved evidence;
@@ -965,17 +1017,23 @@ No automated merge is authorized.
 
 ### F1 — Single-boundary marker support
 
+- [ ] **Completed**
+
 Allow one physical marker with virtual BOF/EOF boundary. Requires schema, parser, composition, migration, tests, and human docs.
 
 Do not make recovery depend on it.
 
 ### F2 — Hierarchical manifest imports and provenance
 
+- [ ] **Completed**
+
 Design schema-level policy imports with declaring-repository provenance, cycle detection, depth limits, duplicate conflict handling, and A→B→C diagnostics.
 
 Do not implement raw textual fences inside JSON.
 
 ### F3 — Performance and dependency hardening
+
+- [ ] **Completed**
 
 Only after correctness:
 
