@@ -426,7 +426,7 @@ Passing tests, completing an implementation, or performing an agent self-review 
 
 ## W0 — Adopt authoritative coordination files
 
-- [ ] **Completed**
+- [x] **Completed**
 
 **Goal:** adopt the authoritative recovery backlog and review protocol, and establish the repository-specific implementation-handoff and protected-control-plane rules.
 
