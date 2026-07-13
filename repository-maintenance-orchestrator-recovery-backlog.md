@@ -1080,24 +1080,29 @@ Recovery is complete only when:
 
 ## 9. Evidence ledger
 
-| Pass | Status | Base SHA | Result SHA/PR | Ledger closure SHA | Tests/runs | Reviewer |
-|---|---|---|---|---|---|
-| W0 | Completed | `a64ef89537304f81466acfcbdd63a187fe74ce51` | `ed8b11288b89a5f0aca2c1551e2d8bdb1606c8a8` / PR #4 | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` | Three-file scope review; Markdown/link checks; `git diff --check` | BionicCode |
-| W1 | Pending | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` |  |  |  |
-| W2 | Locked |  |  |  |  |
-| W3 | Locked |  |  |  |  |
-| W4 | Locked |  |  |  |  |
-| W5 | Locked |  |  |  |  |
-| W6 | Locked |  |  |  |  |
-| W7 | Locked |  |  |  |  |
-| W8 | Locked |  |  |  |  |
-| W9 | Locked |  |  |  |  |
-| W10 | Locked |  |  |  |  |
-| W11 | Locked |  |  |  |  |
-| W12 | Locked |  |  |  |  |
-| W13 | Locked |  |  |  |  |
-| W14 | Locked |  |  |  |  |
-| W15 | Locked |  |  |  |  |
-| W16 | Locked |  |  |  |  |
-| W17 | Locked |  |  |  |  |
-| T0–T6 | Locked | target `dd569d77…` |  |  |  |
+| Pass | Status | Base SHA | Result SHA | PR | Ledger closure SHA | Tests/runs | Reviewer |
+|---|---|---|---|---|---|---|---|
+| W0 | Completed | `a64ef89537304f81466acfcbdd63a187fe74ce51` | `ed8b11288b89a5f0aca2c1551e2d8bdb1606c8a8` | #4 | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` | Three-file scope review; Markdown/link checks; `git diff --check` | BionicCode |
+| W1 | Pending | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` |  |  |  |  |  |
+| W2 | Locked |  |  |  |  |  |  |
+| W2 | Locked |  |  |  |  |  |  |
+| W2 | Locked |  |  |  |  |  |  |
+| W2 | Locked |  |  |  |  |  |  |
+| W2 | Locked |  |  |  |  |  |  |
+| W2 | Locked |  |  |  |  |  |  |
+| W3 | Locked |  |  |  |  |  |  |
+| W4 | Locked |  |  |  |  |  |  |
+| W5 | Locked |  |  |  |  |  |  |
+| W6 | Locked |  |  |  |  |  |  |
+| W7 | Locked |  |  |  |  |  |  |
+| W8 | Locked |  |  |  |  |  |  |
+| W9 | Locked |  |  |  |  |  |  |
+| W10 | Locked |  |  |  |  |  |  |
+| W11 | Locked |  |  |  |  |  |  |
+| W12 | Locked |  |  |  |  |  |  |
+| W13 | Locked |  |  |  |  |  |  |
+| W14 | Locked |  |  |  |  |  |  |
+| W15 | Locked |  |  |  |  |  |  |
+| W16 | Locked |  |  |  |  |  |  |
+| W17 | Locked |  |  |  |  |  |  |
+| T0–T6 | Locked | target `dd569d77…`  |  |  |  |  |  |
