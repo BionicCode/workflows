@@ -446,7 +446,7 @@ Passing tests, completing an implementation, or performing an agent self-review 
 - links and Markdown render correctly;
 - `git diff --check`.
 
-**Review gate:** maintainer approves exact two-file diff.
+**Review gate:** maintainer approves exact three-file diff.
 
 ---
 
@@ -1082,7 +1082,7 @@ Recovery is complete only when:
 
 | Pass | Status | Base SHA | Result SHA/PR | Tests/runs | Reviewer |
 |---|---|---|---|---|---|
-| W0 | Pending | `fbdd7ff…` |  |  |  |
+| W0 | Pending | `a64ef89537304f81466acfcbdd63a187fe74ce51` |  |  |  |
 | W1 | Locked |  |  |  |  |
 | W2 | Locked |  |  |  |  |
 | W3 | Locked |  |  |  |  |
