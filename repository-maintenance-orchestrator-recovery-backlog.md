@@ -21,7 +21,7 @@ It records:
 
 This file does not authorize edits by itself. Every implementation pass still requires a user prompt naming:
 
-- the repository and exact expected base SHA;
+- the repository and exact pre-pass baseline SHA;
 - allowed files;
 - prohibited files;
 - goal and acceptance criteria;
@@ -197,7 +197,7 @@ Workflows never discovers or broadcasts to descendants. A caller explicitly invo
 The authoritative reusable workflow must be callable as:
 
 ```yaml
-uses: BionicCode/workflows/.github/workflows/doc-metadata.yml@<full-commit-sha>
+uses: BionicCode/workflows/.github/workflows/doc-metadata-reusable.yml@<full-commit-sha>
 ```
 
 The called workflow executes in caller context but checks out its implementation from:
@@ -219,7 +219,7 @@ No executable engine script may be loaded from an untrusted PR head.
 Initialization installs a small local wrapper, for example:
 
 ```text
-.github/workflows/doc-metadata.yml
+.github/workflows/doc-metadata-caller.yml
 ```
 
 The wrapper:
@@ -233,7 +233,7 @@ The wrapper:
 The local top-level orchestrator calls this wrapper through:
 
 ```yaml
-uses: ./.github/workflows/doc-metadata.yml
+uses: ./.github/workflows/doc-metadata-caller.yml
 ```
 
 This preserves a stable local interface while keeping one implementation authority.
@@ -351,6 +351,38 @@ Documentation must explain reasons and conventions, including:
 
 Use GitHub callouts and human-oriented examples. Do not expose implementation internals as a substitute for conceptual documentation.
 
+### 4.9 Workflow file-role naming
+
+Workflow filenames must expose their architectural role without requiring the reader to inspect YAML internals.
+
+Use these suffixes:
+
+| Suffix | Meaning |
+|---|---|
+| `-orchestrator.yml` | repository-local, event-triggered top-level workflow that coordinates maintenance jobs |
+| `-caller.yml` | thin repository-local adapter whose primary responsibility is invoking a reusable workflow |
+| `-reusable.yml` | called implementation workflow that declares `workflow_call` |
+
+Approved target names:
+
+| Current or planned role | Canonical filename |
+|---|---|
+| repository maintenance orchestration | `.github/workflows/repository-maintenance-orchestrator.yml` |
+| managed-file sync caller adapter | `.github/workflows/sync-managed-files-caller.yml` |
+| shared manifest-driven sync implementation | `.github/workflows/sync-files-from-manifest-reusable.yml` |
+| doc-metadata caller adapter | `.github/workflows/doc-metadata-caller.yml` |
+| shared doc-metadata implementation | `.github/workflows/doc-metadata-reusable.yml` |
+
+A filename migration is incomplete until every literal path reference is updated and validated, including references in:
+
+- workflow `uses:` clauses;
+- scripts and package templates;
+- tests and fixtures;
+- manifests or generated-file definitions;
+- README files, tutorials, API/type references, examples, and migration documentation.
+
+Because a cross-repository reusable-workflow reference contains the exact workflow path, externally consumed old paths require an explicit compatibility and removal plan. A rename must not silently break existing callers.
+
 ## 5. Session separation
 
 ### Session A — Workflows implementation
@@ -422,6 +454,22 @@ An agent may propose the exact status and evidence updates in its final handoff,
 
 Passing tests, completing an implementation, or performing an agent self-review does not authorize a backlog status change. The maintainer updates status only after independently reviewing and accepting the pass.
 
+### Pass progression gate
+
+Before a pass may begin, the agent must verify the backlog progression state. For the first pass in a roadmap, preceding-pass checks are not applicable:
+
+1. the immediately preceding pass has its completion checkbox checked;
+2. the preceding pass is `Completed` in the evidence ledger;
+3. the preceding pass row contains its required closure evidence;
+4. the current pass appears exactly once and is `Pending`;
+5. the current pass checkbox is unchecked;
+6. every later pass remains `Locked`;
+7. no pass row is missing, duplicated, reordered, or contradictory.
+
+Any failure is a blocking backlog-integrity defect. The agent must stop before performing the current pass and report the exact inconsistency.
+
+The current pass's pre-pass baseline is a separate execution lease. It is supplied literally in the task handoff and validated using Git ancestry. It is not Git's merge base and is not the primary progression gate.
+
 # Session A — `BionicCode/workflows`
 
 ## W0 — Adopt authoritative coordination files
@@ -469,7 +517,9 @@ Passing tests, completing an implementation, or performing an agent self-review 
 **Required review scope:**
 
 - root `README.md`;
-- `AGENTS.md`;
+- root `AGENTS.md`, `AGENT_GUARDRAILS.md`, and `DOCUMENTATION.md`;
+- nested `AGENTS.md` and `AGENTS.override.md` files;
+- `.github/copilot-instructions.md` and `.github/instructions/**/*.instructions.md`;
 - workflow documentation;
 - doc-metadata documentation tree;
 - sync documentation tree;
@@ -502,6 +552,72 @@ Passing tests, completing an implementation, or performing an agent self-review 
 
 ---
 
+## W2A — Approve workflow role naming and migration map
+
+- [ ] **Completed**
+
+**Mode:** Plan Mode; no repository edits.
+
+**Goal:** approve the complete behavior-preserving workflow filename migration before semantic workflow implementation begins.
+
+**Required output:**
+
+- the binding `orchestrator`, `caller`, and `reusable` role definitions from section 4.9;
+- the exact old-to-new filename map;
+- a repository-wide inventory of every literal old-path reference;
+- the exact W2B file allowlist;
+- compatibility treatment for externally referenced old reusable-workflow paths;
+- deprecation and eventual removal criteria for compatibility entry points;
+- validation and rollback steps.
+
+**Stop conditions:**
+
+- any workflow's architectural role remains ambiguous;
+- an external caller cannot be inventoried or protected by compatibility;
+- the migration would require a semantic trigger, permission, input/output, job-graph, or script behavior change.
+
+**Review gate:** maintainer approves the filename map, reference inventory, compatibility plan, and exact W2B allowlist.
+
+---
+
+## W2B — Apply workflow filename and reference migration
+
+- [ ] **Completed**
+
+**Goal:** apply the approved W2A filename migration as a behavior-preserving preparation pass before functional workflow implementation.
+
+**Allowed files:** exactly the files approved by W2A. Protected control-plane files remain read-only unless the current task explicitly names and authorizes them.
+
+**Required behavior:**
+
+- rename workflow files to their canonical role-suffixed names;
+- update every workflow, script, test, fixture, manifest/template, and documentation reference to the new paths;
+- preserve triggers, permissions, inputs, outputs, secrets, conditions, job dependencies, concurrency, and executed scripts;
+- retain an explicitly documented compatibility entry point when an existing cross-repository caller still references an old reusable-workflow path;
+- add no unrelated cleanup or functional behavior change;
+- leave no unexplained stale reference to a retired filename.
+
+**Validation:**
+
+- repository-wide literal-reference search for every old filename;
+- YAML parse;
+- `actionlint` or equivalent semantic workflow lint;
+- caller-to-reusable reference matrix;
+- compatibility caller fixture where required;
+- Markdown link/reference validation;
+- `git diff --check`;
+- complete rename-only diff review.
+
+**Stop conditions:**
+
+- a semantic behavior change is required;
+- an external caller would break without an unapproved compatibility mechanism;
+- the exact W2A allowlist is insufficient.
+
+**Review gate:** maintainer accepts a behavior-preserving filename/reference migration before W3 begins.
+
+---
+
 ## W3 — Contain broken Workflows self-orchestration
 
 - [ ] **Completed**
@@ -510,11 +626,11 @@ Passing tests, completing an implementation, or performing an agent self-review 
 
 **Expected file:**
 
-- `.github/workflows/repository-maintenance.yml`
+- `.github/workflows/repository-maintenance-orchestrator.yml`
 
 **Required behavior:**
 
-- no call to absent `.github/workflows/sync-managed-files.yml`;
+- no call to an absent `.github/workflows/sync-managed-files-caller.yml`;
 - no source-side sync broadcast;
 - no schedule;
 - local self-maintenance only;
@@ -596,7 +712,7 @@ Any failure becomes a separate bounded pass. Historical green runs do not replac
 
 Must specify:
 
-- public reusable workflow filename;
+- canonical role-suffixed workflow filenames and compatibility paths approved by W2A/W2B;
 - stable caller inputs, secrets, outputs, and permissions;
 - caller/base/head checkout matrix;
 - Workflows self-checkout through `job.workflow_repository`/`job.workflow_sha`;
@@ -626,8 +742,8 @@ Must specify:
 
 **Expected files:**
 
-- `.github/workflows/doc-metadata.yml`
-- `.github/workflows/repository-maintenance.yml` only for final local self-call
+- `.github/workflows/doc-metadata-reusable.yml`
+- `.github/workflows/repository-maintenance-orchestrator.yml` only for final local self-call
 - `.github/scripts/doc-metadata/**`
 - `.github/tools/doc-metadata/**`
 - focused docs and tests required by the public contract
@@ -1080,11 +1196,36 @@ Recovery is complete only when:
 
 ## 9. Evidence ledger
 
+### Column glossary
+
+| Column | Meaning |
+|---|---|
+| `Pass` | Stable backlog identifier. Each pass must appear exactly once and in roadmap order. |
+| `Status` | Maintainer-controlled progression state: `Locked`, `Pending`, or `Completed`. |
+| `Pre-pass baseline SHA` | Exact repository snapshot after prerequisite maintenance is complete and immediately before pass-specific work begins. It is the pass rollback/comparison point and execution lease; it is not Git's merge base. |
+| `Result SHA` | Commit containing the reviewed pass result that landed on the target branch. |
+| `PR #` | Pull request that delivered the result, or explicit `N/A` when no PR was used. |
+| `Ledger closure SHA` | Later maintainer-controlled commit that records accepted evidence, checks the pass complete, and unlocks the next pass. It may equal the result SHA when closure was recorded in the same commit. |
+| `Tests/runs` | Concise references to the validation and review evidence accepted for closure. |
+| `Reviewer` | Maintainer or reviewer who accepted the review gate and closed the pass. |
+
+### Status glossary
+
+| Status | Meaning |
+|---|---|
+| `Locked` | The preceding pass has not been formally closed; work must not begin. |
+| `Pending` | The preceding pass is closed and this is the only pass currently eligible to start. |
+| `Completed` | The maintainer independently accepted the pass, recorded closure evidence, and checked its completion box. |
+
+The pre-pass baseline is supplied literally in the current task handoff. It must be an ancestor of every pass-specific commit and should normally be the direct parent of the first pass-specific commit. Preparation commits that must survive a rollback belong before the pre-pass baseline. Equality with `git merge-base` is neither required nor sufficient.
+
 | Pass | Status | Pre-pass baseline SHA | Result SHA | PR # | Ledger closure SHA | Tests/runs | Reviewer |
 |---|---|---|---|---|---|---|---|
 | W0 | Completed | `a64ef89537304f81466acfcbdd63a187fe74ce51` | `ed8b11288b89a5f0aca2c1551e2d8bdb1606c8a8` | 4 | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` | Three-file scope review; Markdown/link checks; `git diff --check` | BionicCode |
 | W1 | Pending | `b6806780df871baf00cc5469b40550cf71abc51e` |  |  |  |  |  |
 | W2 | Locked |  |  |  |  |  |  |
+| W2A | Locked |  |  |  |  |  |  |
+| W2B | Locked |  |  |  |  |  |  |
 | W3 | Locked |  |  |  |  |  |  |
 | W4 | Locked |  |  |  |  |  |  |
 | W5 | Locked |  |  |  |  |  |  |

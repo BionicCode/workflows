@@ -49,7 +49,7 @@ Record before planning or editing:
 - repository full name and role;
 - default branch;
 - exact current HEAD;
-- expected writable base SHA;
+- exact pre-pass baseline SHA from the current task handoff;
 - branch/worktree state;
 - applicable agent instructions;
 - relevant caller/called workflow SHA;
@@ -57,7 +57,48 @@ Record before planning or editing:
 - runtime/tool availability;
 - unavailable credentials or external fixtures.
 
-If a writable base differs from the expected SHA, stop before editing.
+### Backlog progression and evidence-ledger start gate
+
+The evidence ledger is the authoritative record of pass order and maintainer review closure.
+
+Before a pass may begin, verify the following. For the first pass in a roadmap, preceding-pass checks are not applicable:
+
+1. the immediately preceding pass has its completion checkbox checked;
+2. the preceding pass has status `Completed`;
+3. the preceding pass row contains its pre-pass baseline SHA, result SHA, PR number or explicit `N/A`, ledger closure SHA, accepted validation/review evidence, and reviewer;
+4. the current pass appears exactly once and has status `Pending`;
+5. the current pass completion checkbox is unchecked;
+6. every later pass remains `Locked`;
+7. no pass row is missing, duplicated, reordered, or contradictory.
+
+If any condition fails, stop before starting the pass and report the exact backlog-integrity defect.
+
+Completing implementation, passing tests, or producing an agent self-review never closes a pass. Only the maintainer may check completion, record closure evidence, or unlock the next pass unless the current prompt explicitly authorizes a coordination-only update to those exact control-plane files.
+
+### Pre-pass baseline lease
+
+The pre-pass baseline SHA is the exact repository snapshot after all prerequisite and maintenance work is complete and immediately before pass-specific work begins.
+
+It is:
+
+- the pass input snapshot;
+- the rollback and comparison point;
+- the execution lease supplied literally in the current task handoff.
+
+It is not Git's merge base. It does not have to equal the branch fork point, but it must be an ancestor of every pass-specific commit and should normally be the direct parent of the first pass-specific commit.
+
+Preparation or maintenance commits that must survive a rollback belong before the pre-pass baseline. A maintainer-only bookkeeping commit that records the baseline may follow it when explicitly identified.
+
+Before pass-specific work and again in the final report:
+
+- resolve the task-supplied baseline commit;
+- verify it is an ancestor of the current pass work;
+- inspect all commits after it;
+- stop when unexpected or unapproved changes exist between the baseline and the pass work.
+
+The current pass's ledger baseline may be empty or differ on `main` while an unmerged branch records new bookkeeping. The task handoff plus verified ancestry governs execution; the ledger permanently records the accepted value when the pass is closed.
+
+Bot and automation branches are volatile evidence and must never be used as a pre-pass baseline unless the maintainer explicitly designates and reviews that exact commit.
 
 ## 5. Session isolation
 
@@ -80,22 +121,7 @@ When the current session is caller-only:
 - do not locally patch shared behavior in the caller;
 - do not retain two active roadmaps.
 
-## 6. Base-SHA lease
-
-Each pass has an exact base-SHA lease.
-
-Resolve immediately before first edit and final report.
-
-If the base moves:
-
-- do not silently rebase;
-- compare intervening changes with assumptions;
-- return to Plan Mode when overlap exists;
-- require maintainer approval before rebasing otherwise.
-
-Bot branches are volatile evidence, not baselines.
-
-## 7. Task-mode rules
+## 6. Task-mode rules
 
 ### Review-only
 
@@ -128,7 +154,7 @@ Unresolved behavior becomes a maintainer decision.
 - review complete diff;
 - no push/merge/dispatch/PR mutation unless separately authorized.
 
-## 8. Reusable-workflow rules
+## 7. Reusable-workflow rules
 
 For cross-repository reusable workflows:
 
@@ -142,6 +168,28 @@ For cross-repository reusable workflows:
 - called workflow runners are evaluated in caller context;
 - nested workflows must all be accessible;
 - concurrency groups in caller and called workflow must not accidentally cancel each other.
+
+### Workflow file-role naming
+
+Use role-suffixed filenames:
+
+- `*-orchestrator.yml` for repository-local event-triggered coordination workflows;
+- `*-caller.yml` for thin repository-local adapters that invoke reusable workflows;
+- `*-reusable.yml` for called implementations that declare `workflow_call`.
+
+A workflow filename migration must be a separately reviewed, behavior-preserving preparation pass before semantic implementation.
+
+The migration must:
+
+- define an exact old-to-new map;
+- inventory every literal old path before editing;
+- update workflow `uses:` paths, scripts, tests, fixtures, manifests/templates, generated-file definitions, and documentation;
+- preserve triggers, permissions, inputs, outputs, secrets, job dependencies, conditions, concurrency, and executed scripts;
+- provide compatibility for externally consumed old reusable-workflow paths until their callers are migrated;
+- define the compatibility removal gate;
+- prove no unexplained stale path remains.
+
+Because callers reference the literal reusable-workflow path, a file rename is a public contract migration rather than a cosmetic filesystem change.
 
 ### Authoritative implementation checkout
 
@@ -164,7 +212,7 @@ Keep separate paths for:
 
 Never execute code from an untrusted PR head.
 
-## 9. Generated thin-wrapper rules
+## 8. Generated thin-wrapper rules
 
 The thin wrapper is generated dependency metadata, not engine code.
 
@@ -180,7 +228,7 @@ It must:
 
 Because `uses:` cannot use expressions, do not model the wrapper as an ordinary byte-for-byte sync source with dynamic SHA substitution.
 
-## 10. Package initialization and upgrade
+## 9. Package initialization and upgrade
 
 A package installer must be:
 
@@ -238,7 +286,7 @@ The following must identify one engine version:
 
 Do not auto-update docs/schema beyond the pinned engine.
 
-## 11. Sync/doc-metadata coupling boundary
+## 10. Sync/doc-metadata coupling boundary
 
 Only sync interprets:
 
@@ -261,7 +309,7 @@ Plan breaking changes require:
 - caller docs;
 - wrapper/package compatibility review.
 
-## 12. Canonical version-authority review
+## 11. Canonical version-authority review
 
 Verify:
 
@@ -277,7 +325,7 @@ Verify:
 
 `Version` must never be used to choose a content winner.
 
-## 13. Documentation quality gate
+## 12. Documentation quality gate
 
 Documentation is a required product surface.
 
@@ -306,7 +354,7 @@ Documentation must:
 
 A pass is incomplete when code/tests pass but docs/schema/examples disagree.
 
-## 14. Validation layers
+## 13. Validation layers
 
 ### Layer A — text/syntax
 
@@ -349,7 +397,7 @@ Use a real external caller. A same-repository self-call is necessary but not suf
 
 Run the complete engine sequence twice. The second pass must be no-op.
 
-## 15. Test-harness requirements
+## 14. Test-harness requirements
 
 Child-process harnesses must:
 
@@ -361,7 +409,7 @@ Child-process harnesses must:
 - clean temporary repositories in `finally`;
 - avoid sleep-based synchronization where deterministic signaling exists.
 
-## 16. Test-quality review
+## 15. Test-quality review
 
 Inspect whether tests:
 
@@ -379,7 +427,7 @@ Inspect whether tests:
 
 An unrelated defect unlocks a separate pass; it does not expand the current pass.
 
-## 17. Security and trust review
+## 16. Security and trust review
 
 For every workflow/package pass, review:
 
@@ -400,7 +448,7 @@ For every workflow/package pass, review:
 - concurrency and stale-run races;
 - dependency pinning.
 
-## 18. Required review output
+## 17. Required review output
 
 Return:
 
@@ -419,11 +467,11 @@ Return:
 13. GitHub state changed.
 14. Exact next unlocked pass.
 
-## 19. Completion standard
+## 18. Completion standard
 
 A pass completes only when:
 
-- exact base and result SHAs are recorded;
+- exact pre-pass baseline, result, and ledger closure SHAs are recorded;
 - scope is exact;
 - public contract is satisfied;
 - required tests and semantic validation pass;
@@ -435,7 +483,7 @@ A pass completes only when:
 
 Unavailable evidence remains explicitly unverified.
 
-## 20. Protected control-plane files
+## 19. Protected control-plane files
 
 The following files are read-only by default because they define agent behavior, review authority, repository policy, or roadmap state:
 
