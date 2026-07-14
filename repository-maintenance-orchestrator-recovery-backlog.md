@@ -1199,28 +1199,28 @@ Recovery is complete only when:
 **See [evidence-ledger-documentation.md](evidence-ledger-documentation.md) for details.**
 
 > [!NOTE]
-> **Historical W1 baseline exception**
+> **Historical W1 bookkeeping arrangement**
 >
 > W1 predates the finalized activation-commit workflow.
 >
-> The W1 execution handoff used
-> `3a3fe364028db003bfc89d3a94fd8a9f167d1f35` as the reviewed implementation
-> baseline and explicitly approved
-> `af639f43688bfd136b1dbdf051cc07bb7c588068` as the sole post-baseline
-> bookkeeping commit.
+> Its execution handoff used
+> `3a3fe364028db003bfc89d3a94fd8a9f167d1f35` as the task-supplied pre-pass
+> baseline and execution lease.
 >
-> The evidence ledger intentionally records
-> `3a3fe364028db003bfc89d3a94fd8a9f167d1f35` as W1’s historical pre-pass
-> baseline because it was the final maintainer-approved repository snapshot
-> immediately before W1 execution.
+> The W1 branch contained one explicitly approved post-baseline bookkeeping
+> commit:
 >
-> This is a project-specific historical exception. It must not be treated as a
-> defect or generalized to later passes.
+> `af639f43688bfd136b1dbdf051cc07bb7c588068`
 >
-> Beginning with W2, the pre-pass baseline is the dedicated `Locked` → `Pending`
-> activation commit on the target branch. The pass branch must be created from
-> exactly that commit, and the baseline is recorded in the ledger when the pass
-> is closed.
+> That commit updated the ledger to record the task-supplied baseline and
+> restored the backlog file’s final newline. It was verified as part of W1’s
+> start checks, but it was not the W1 pre-pass baseline or pass result.
+>
+> Beginning with W2, the dedicated `Locked` → `Pending` activation commit on
+> the target branch is supplied as the pre-pass baseline, and the pass branch
+> is created from exactly that commit. This avoids the historical W1
+> bookkeeping arrangement.
+
 
 
 | Pass | Status | Pre-pass baseline SHA | Result SHA | PR # | Review-gate closure SHA | Tests/runs | Reviewer |
