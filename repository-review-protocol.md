@@ -75,6 +75,102 @@ If any condition fails, stop before starting the pass and report the exact backl
 
 Completing implementation, passing tests, or producing an agent self-review never closes a pass. Only the maintainer may check completion, record closure evidence, or unlock the next pass unless the current prompt explicitly authorizes a coordination-only update to those exact control-plane files.
 
+### Evidence-ledger integrity review
+
+The evidence ledger is a protected control-plane state machine. Any review that closes a pass, finalizes a completed row, activates another pass, or modifies ledger semantics must validate the ledger against `evidence-ledger-documentation.md`.
+
+The review must confirm all applicable invariants.
+
+#### Structural integrity
+
+1. Every roadmap pass appears exactly once.
+2. Passes remain in the defined roadmap order.
+3. No pass identifier is missing, duplicated, renamed, or reused without an explicitly approved roadmap migration.
+4. The ledger column names and meanings match the authoritative evidence-ledger documentation.
+5. Completion checkboxes and ledger statuses agree.
+
+#### State integrity
+
+1. At most one pass has status `Pending`.
+2. Zero pending passes is valid during ledger finalization or inter-pass maintenance.
+3. A pass transitions only:
+
+   * `Locked → Pending`;
+   * `Pending → Completed`.
+4. A pass does not transition directly from `Locked` to `Completed`.
+5. A completed pass does not return to `Pending`.
+6. Every pass after the pending pass remains `Locked`.
+7. A pass remains `Locked` until its predecessor row is fully finalized and all inter-pass maintenance is complete.
+
+#### Evidence integrity
+
+For every completed pass, confirm that the row contains:
+
+1. the historical `Pre-pass baseline SHA`;
+2. the accepted `Result SHA`, or the exact review-only `N/A` value;
+3. the delivering `PR #`, or explicit `N/A`;
+4. the `Review-gate closure SHA`;
+5. accepted `Tests/runs`;
+6. the accepting `Reviewer`;
+7. a checked completion checkbox.
+
+Confirm that each SHA has exactly one documented semantic role:
+
+* activation and execution lease;
+* pass result;
+* review-gate closure;
+* merge or post-merge finalization, where separately recorded.
+
+Do not use a bookkeeping, activation, closure, merge, or finalization commit as the `Result SHA` unless that commit contains the accepted pass-specific result.
+
+#### Baseline and ancestry integrity
+
+For the pending or reviewed pass:
+
+1. resolve the task-supplied pre-pass baseline;
+2. confirm it is the approved activation commit, except for an explicit project-specific historical exception;
+3. confirm the pass branch was created from that commit;
+4. confirm the baseline is an ancestor of every pass-specific commit;
+5. inspect all commits after the baseline;
+6. confirm that no unexpected or unapproved change exists;
+7. confirm that the baseline recorded at closure matches the baseline used during execution.
+
+The active pass’s baseline ledger cell remains empty until closure. The task handoff supplies the execution lease while the pass is active.
+
+#### Commit-separation integrity
+
+Confirm that:
+
+1. the pass-result commit contains the accepted pass-specific result;
+2. the review-gate closure commit changes only explicitly authorized control-plane state;
+3. the review-gate closure commit does not activate the next pass;
+4. post-merge row finalization leaves later passes `Locked`;
+5. next-pass activation occurs through a distinct `Locked → Pending` transition after finalization and maintenance are complete;
+6. no ledger operation depends on a commit containing its own SHA.
+
+Combined commits require explicit justification and must preserve every invariant above.
+
+#### Authority and scope integrity
+
+Confirm that:
+
+1. the current prompt explicitly authorizes every protected control-plane path being modified;
+2. only the maintainer, or an explicitly authorized coordination task, changes pass status, completion checkboxes, or accepted ledger evidence;
+3. pass-result files are not changed by a coordination-only closure or activation commit;
+4. project-specific exceptions are documented in the owning backlog rather than weakening the reusable evidence-ledger rules.
+
+#### Review outcome
+
+If any structural, state, evidence, ancestry, commit-separation, or authority invariant fails:
+
+1. do not approve the ledger change;
+2. do not begin or unlock another pass;
+3. identify the exact conflicting row, field, commit, or transition;
+4. require a maintainer-controlled governance or coordination correction;
+5. repeat the complete ledger-integrity review after the correction.
+
+A syntactically valid Markdown table is not sufficient evidence of ledger integrity.
+
 ### Pre-pass baseline lease
 
 The pre-pass baseline SHA is the exact repository snapshot after all prerequisite and maintenance work is complete and immediately before pass-specific work begins.
