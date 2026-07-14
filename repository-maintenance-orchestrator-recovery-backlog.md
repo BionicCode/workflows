@@ -1196,33 +1196,7 @@ Recovery is complete only when:
 
 ## 9. Evidence ledger
 
-### Column glossary
-
-| Column | Meaning | Population timing |
-|---|---|---|
-| `Pass` | Stable backlog identifier. Each pass must appear exactly once and in roadmap order. | Predefined. |
-| `Status` | Maintainer-controlled progression state: `Locked`, `Pending`, or `Completed`. | Predefined as `Locked`. Transitions to `Pending` after merge into `main` and before branching from `main`. Transitions to `Completed` after pass and before merge into `main`. |
-| `Pre-pass baseline SHA` | Exact repository snapshot after prerequisite maintenance is complete and immediately before pass-specific work begins. It is the pass rollback/comparison point and execution lease; it is not Git's merge base. | After the pass but before merging. |
-| `Result SHA` | Commit containing the reviewed pass result that landed on the target branch. Value is *"N/A — review-only; no repository change"* if the pass was a pure review pass. | After pass but before merge into `main`. |
-| `PR #` | Pull request that delivered the result, or explicit `N/A` when no PR was used. | After merge into `main`. |
-| `Ledger closure SHA` | Later maintainer-controlled commit that records accepted evidence, checks the pass complete, and unlocks the next pass. It may equal the result SHA when closure was recorded in the same commit. | After merge into `main`. |
-| `Tests/runs` | Concise references to the validation and review evidence accepted for closure. | After pass but before merge into `main`. |
-| `Reviewer` | Maintainer or reviewer who accepted the review gate and closed the pass. | After pass but before merge into `main`. |
-
-> [!IMPORTANT]
-> Before branching, the previuos pass' row must be completely populated and the next pass must have `Status´` set to `Pending`.  
-> A new pass always starts after the branching from `main`. The `Pre-pass baseline SGA` column is still empty. All columns excpt `Pass` and `Status` remain empty until after the pass.
-
-> [!IMPORTANT]
-> The pre-pass baseline is supplied literally in the current task handoff. It must be an ancestor of every pass-specific commit and should normally be the direct parent of the first pass-specific commit. Preparation commits that must survive a rollback belong before the pre-pass baseline. Equality with `git merge-base` is neither required nor sufficient.
-
-### Status glossary
-
-| Status | Meaning |
-|---|---|
-| `Locked` | The preceding pass has not been formally closed; work must not begin. |
-| `Pending` | The preceding pass is closed and this is the only pass currently eligible to start. |
-| `Completed` | The maintainer independently accepted the pass, recorded closure evidence, and checked its completion box. |
+**See [evidence-ledger-documentation.md](/evidence-ledger-documentation.md) for details.**
 
 | Pass | Status | Pre-pass baseline SHA | Result SHA | PR # | Ledger closure SHA | Tests/runs | Reviewer |
 |---|---|---|---|---|---|---|---|
