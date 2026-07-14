@@ -1198,7 +1198,32 @@ Recovery is complete only when:
 
 **See [evidence-ledger-documentation.md](evidence-ledger-documentation.md) for details.**
 
-| Pass | Status | Pre-pass baseline SHA | Result SHA | PR # | Ledger closure SHA | Tests/runs | Reviewer |
+> [!NOTE]
+> **Historical W1 baseline exception**
+>
+> W1 predates the finalized activation-commit workflow.
+>
+> The W1 execution handoff used
+> `3a3fe364028db003bfc89d3a94fd8a9f167d1f35` as the reviewed implementation
+> baseline and explicitly approved
+> `af639f43688bfd136b1dbdf051cc07bb7c588068` as the sole post-baseline
+> bookkeeping commit.
+>
+> The evidence ledger intentionally records
+> `af639f43688bfd136b1dbdf051cc07bb7c588068` as W1’s historical pre-pass
+> baseline because it was the final maintainer-approved repository snapshot
+> immediately before W1 execution.
+>
+> This is a project-specific historical exception. It must not be treated as a
+> defect or generalized to later passes.
+>
+> Beginning with W2, the pre-pass baseline is the dedicated `Locked` → `Pending`
+> activation commit on the target branch. The pass branch must be created from
+> exactly that commit, and the baseline is recorded in the ledger when the pass
+> is closed.
+
+
+| Pass | Status | Pre-pass baseline SHA | Result SHA | PR # | Review-gate closure SHA | Tests/runs | Reviewer |
 |---|---|---|---|---|---|---|---|
 | W0 | Completed | `a64ef89537304f81466acfcbdd63a187fe74ce51` | `ed8b11288b89a5f0aca2c1551e2d8bdb1606c8a8` | 4 | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` | Three-file scope review; Markdown/link checks; `git diff --check` | BionicCode |
 | W1 | Completed | `af639f43688bfd136b1dbdf051cc07bb7c588068` | N/A — review-only; no repository change | 8 | `9abed50a87fafb80157cab636fd73de018f3c5ea` | 30/30 tracked Markdown audited; lease, ancestry, merge-base, and bookkeeping diff verified; 20 local targets and 3 anchors resolved; static workflow/script/schema/manifest/example audit; `git diff --check` PASS; PowerShell suite and GitHub Actions not run; sync tests executed 0 tests because `jsonschema` was unavailable | BionicCode |
@@ -1220,4 +1245,10 @@ Recovery is complete only when:
 | W15 | Locked |  |  |  |  |  |  |
 | W16 | Locked |  |  |  |  |  |  |
 | W17 | Locked |  |  |  |  |  |  |
-| T0–T6 | Locked | target `dd569d77…`  |  |  |  |  |  |
+| T0 | Locked |  |  |  |  |  |  |
+| T1 | Locked |  |  |  |  |  |  |
+| T2 | Locked |  |  |  |  |  |  |
+| T3 | Locked |  |  |  |  |  |  |
+| T4 | Locked |  |  |  |  |  |  |
+| T5 | Locked |  |  |  |  |  |  |
+| T6 | Locked |  |  |  |  |  |  |
