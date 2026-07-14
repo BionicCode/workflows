@@ -1,7 +1,6 @@
 # [Evidence Ledger](repository-maintenance-orchestrator-recovery-backlog.md/#9-evidence-ledger) Documentation
 
-The evidence ledger serves to document the current state of indiividual backlog items including mapping of those state to an actual Git commit.
-
+The evidence ledger serves to document the current state of indiividual backlog items including mapping of those state to an actual Git commit.  
 Updateing the ledger must follow a well-defined workflow/algorithm to ensure integrity and avoid blocking conditions caused by outdated data. 
 
 ## Terminology
@@ -22,7 +21,8 @@ Updateing the ledger must follow a well-defined workflow/algorithm to ensure int
 
 ## States
 
-The ledger reflects the different states of each backlog item following strict transition rules, resembling a state machine. Violating this rules can result in a block until the conflicting states have been resolved.
+The ledger reflects the different states of each backlog item following strict transition rules, resembling a state machine.  
+Violating this rules can result in a block until the conflicting states have been resolved.
 
 > [!NOTE]
 > There can only be a single pas active at the time.
@@ -33,7 +33,7 @@ The ledger reflects the different states of each backlog item following strict t
 |---|---|
 | `Locked` | The preceding pass has not been formally closed; work must not begin. |
 | `Pending` | The preceding pass is closed and this is the only pass that is currently running or eligible to start. |
-| `Completed` | The maintainer has accepted the pass result and closed pass-specific work. The next pass remains Locked. Post-merge fields such as PR number and review-gate closure SHA may still require ledger finalization. |
+| `Completed` | The maintainer has accepted the pass result and closed pass-specific work.<br>The next pass remains Locked. Post-merge fields such as PR number and review-gate closure SHA may still require ledger finalization. |
 
 ```mermaid
 stateDiagram-v2
@@ -98,11 +98,16 @@ Transition is only allowed after the previous row is fully finalized (see [Accep
 2. Commit that change on `main`.
 3. Record that commit SHA in the handoff as the pre-pass baseline.
     > [!IMPORTANT]
-    > The pre-pass baseline is supplied literally in the current task handoff but not entered into the ledger table at this point (to avoid commit drift/trailing). It must be an ancestor of every pass-specific commit and should normally be the direct parent of the first pass-specific commit. Preparation commits that must survive a rollback belong before the pre-pass baseline. Equality with `git merge-base` is neither required nor sufficient.
+    > The pre-pass baseline is supplied literally in the current task handoff but not entered into the ledger table at this point (to avoid commit drift/trailing).   
+    > It must be an ancestor of every pass-specific commit and should normally be the direct parent of the first pass-specific commit.   
+    > Preparation commits that must survive a rollback belong before the pre-pass baseline.   
+    > Equality with `git merge-base` is neither required nor sufficient.
 4. Create the pass branch from exactly that commit.
     > [!IMPORTANT]
-    > Before branching, the previuos pass' row must be completely populated and the next pass must have `Status´` set to `Pending`.  
-    > A new pass always starts after the branching from `main`. The `Pre-pass baseline SGA` column is still empty as it will be populated after result of the pass becomes available. This means, all columns except `Pass` and `Status` remain empty for the started pass (backlog item).
+    > Before branching, the previuos pass' row must be completely populated and the next pass must have `Status´` set to `Pending`.   
+    > A new pass always starts after the branching from `main`. The `Pre-pass baseline SGA` column is still empty as it will be populated   
+    > after result of the pass becomes available. This means, all columns except `Pass` and `Status`  
+    > remain empty for the started pass (backlog item).
 5. Leave the ledger’s baseline cell empty until closure.
 6. Execute pass
 
