@@ -1,13 +1,14 @@
 # Repository Maintenance Recovery Backlog
 
-Snapshot date: 2026-07-11  
-Status: proposed authoritative replacement after Workflows-source review  
-Primary implementation repository: `BionicCode/workflows`  
-First caller migration repository: `BionicCode/template-visual-studio-repository`
+- Historical review snapshot date: 2026-07-11
+- Backlog authority: authoritative recovery roadmap and project-state record
+- Current execution state: resolved separately at the start of each authorized task; the historical snapshot below is not an execution lease
+- Primary implementation repository: `BionicCode/workflows`
+- First caller migration repository: `BionicCode/template-visual-studio-repository`
 
 ## 1. Purpose and authority
 
-This backlog is the single ordered ledger for recovering and consolidating managed-file synchronization and document-metadata automation.
+This backlog is the authoritative ordered roadmap and project-state record for recovering and consolidating managed-file synchronization and document-metadata automation.
 
 It records:
 
@@ -19,17 +20,14 @@ It records:
 - per-pass scope, validation, stop conditions, and review gates;
 - the evidence required before later passes unlock.
 
-This file does not authorize edits by itself. Every implementation pass still requires a user prompt naming:
+The supporting authorities are:
 
-- the repository and exact pre-pass baseline SHA;
-- allowed files;
-- prohibited files;
-- goal and acceptance criteria;
-- validation;
-- stop conditions;
-- whether the pass may be merged independently.
+- [backlog-workflow-documentation.md](backlog-workflow-documentation.md) for the reusable pass lifecycle, admission, handoff, and orchestration rules;
+- [evidence-ledger-documentation.md](evidence-ledger-documentation.md) for ledger columns, states, transitions, and evidence invariants;
+- [repository-review-protocol.md](repository-review-protocol.md) for repository evidence, start, stop, validation, and review gates;
+- [AGENTS.md](AGENTS.md), [AGENT_GUARDRAILS.md](AGENT_GUARDRAILS.md), [DOCUMENTATION.md](DOCUMENTATION.md), and any applicable path-specific instruction file for repository execution and documentation rules.
 
-`repository-review-protocol.md` is authoritative only for reusable review and validation rules. It must not contain competing task status or product-roadmap instructions.
+This file does not authorize repository or GitHub writes by itself. Every activated pass, in every task mode, requires current user authorization and an authorized execution handoff that supplies the exact runtime scope and lease.
 
 ## 2. Reviewed immutable state
 
@@ -436,39 +434,49 @@ Do not mix Workflows engine changes into Session B. A defect in the shared engin
 
 The order below is mandatory.
 
-Checkbox convention: an unchecked box means the pass is open; tick it only after its review gate has been accepted and the evidence ledger has been updated.
+### Lifecycle and state authority
 
-### Status ownership
+Apply the lifecycle and handoff rules in [backlog-workflow-documentation.md](backlog-workflow-documentation.md), the state and evidence rules in [evidence-ledger-documentation.md](evidence-ledger-documentation.md), and the start, stop, and integrity gates in [repository-review-protocol.md](repository-review-protocol.md).
 
-All pass-completion checkboxes and the evidence ledger are maintainer-controlled review state.
+For this recovery, pass-completion checkboxes and the evidence ledger are maintainer-controlled state. They may change only through current user authorization that explicitly permits the exact coordination update. Execution, validation, or self-review alone does not complete a pass or unlock later work. The task-specific execution handoff supplies the literal pre-pass baseline and runtime lease.
 
-Coding agents must not:
+### Ordered pass index
 
-* check or uncheck pass-completion boxes;
-* change a pass from `Pending` or `Locked` to another status;
-* record a pass as accepted, complete, or reviewed;
-* update the evidence ledger;
-* unlock a later pass.
+This index is navigation, not a second evidence ledger. The status values mirror the authoritative ledger in section 9.
 
-An agent may propose the exact status and evidence updates in its final handoff, but it must not apply them unless the current user prompt explicitly authorizes modification of this backlog for that coordination-only purpose.
+| ID | Title | Mode | Immediate dependency | Status |
+|---|---|---|---|---|
+| W0 | Adopt authoritative coordination files | coordination | — | Completed |
+| W1 | Documentation authority and current-state audit | review-only | W0 | Completed |
+| W2 | Stabilize current-state documentation before Codex implementation | implementation | W1 | Locked |
+| W2A | Approve workflow role naming and migration map | planning | W2 | Locked |
+| W2B | Apply workflow filename and reference migration | implementation | W2A | Locked |
+| W3 | Contain broken Workflows self-orchestration | implementation | W2B | Locked |
+| W4 | Stabilize the PowerShell acceptance harness | implementation | W3 | Locked |
+| W5 | Establish fresh executable baseline | validation-only | W4 | Locked |
+| W6 | Approve the reusable workflow and package contract | planning | W5 | Locked |
+| W7 | Convert doc-metadata into the authoritative reusable engine | implementation | W6 | Locked |
+| W8 | Implement package-aware init/upgrade | implementation | W7 | Locked |
+| W9 | Implement one shared sync authority classifier | implementation | W8 | Locked |
+| W10 | Make sync execution consume the classifier | implementation | W9 | Locked |
+| W11 | Expose the read-only ownership plan | implementation | W10 | Locked |
+| W12 | Enforce exclusive canonical version authority | implementation | W11 | Locked |
+| W13 | Prove cross-engine convergence in fixtures | validation-only | W12 | Locked |
+| W14 | Correct manifest governance | implementation | W13 | Locked |
+| W15 | Canonical links | implementation | W14 | Locked |
+| W16 | Complete protected-field tamper coverage | implementation | W15 | Locked |
+| W17 | Workflows release-candidate certification | validation-only | W16 | Locked |
+| T0 | Resolve and quarantine caller documentation | implementation | W17 | Locked |
+| T1 | Run package init/upgrade on a migration branch | migration | T0 | Locked |
+| T2 | Shared-versus-local parity gate | validation-only | T1 | Locked |
+| T3 | Switch orchestration to the thin wrapper | migration | T2 | Locked |
+| T4 | Prove live caller convergence | validation-only | T3 | Locked |
+| T5 | Remove duplicated caller engine | migration | T4 | Locked |
+| T6 | Clean stale automation state | coordination | T5 | Locked |
 
-Passing tests, completing an implementation, or performing an agent self-review does not authorize a backlog status change. The maintainer updates status only after independently reviewing and accepting the pass.
+### Project-specific historical exception
 
-### Pass progression gate
-
-Before a pass may begin, the agent must verify the backlog progression state. For the first pass in a roadmap, preceding-pass checks are not applicable:
-
-1. the immediately preceding pass has its completion checkbox checked;
-2. the preceding pass is `Completed` in the evidence ledger;
-3. the preceding pass row contains its required closure evidence;
-4. the current pass appears exactly once and is `Pending`;
-5. the current pass checkbox is unchecked;
-6. every later pass remains `Locked`;
-7. no pass row is missing, duplicated, reordered, or contradictory.
-
-Any failure is a blocking backlog-integrity defect. The agent must stop before performing the current pass and report the exact inconsistency.
-
-The current pass's pre-pass baseline is a separate execution lease. It is supplied literally in the task handoff and validated using Git ancestry. It is not Git's merge base and is not the primary progression gate.
+W0 and W1 were accepted before this backlog adopted the normalized pass template. Their original inline specifications intentionally remain historical and are not reopened or rewritten merely because they omit fields introduced later. This presentation exception does not waive ledger integrity or permit accepted historical evidence to be changed or recorded inaccurately.
 
 # Session A — `BionicCode/workflows`
 
@@ -536,19 +544,107 @@ The current pass's pre-pass baseline is a separate execution lease. It is suppli
 
 - [ ] **Completed**
 
-**Goal:** remove or quarantine documentation that could cause Codex to implement stale behavior.
+**Mode:** implementation (documentation-only).
 
-**Allowed files:** only files approved from W1.
+**Objective:** make the maintainer-approved W1 documentation set accurately describe current repository behavior, clearly separate planned and historical behavior, and remove or quarantine guidance that could cause Codex or a human contributor to implement stale behavior.
 
-**Rules:**
+**Rationale:** W1 identified potentially normative Markdown whose authority or implementation match must be corrected before semantic workflow work begins. Stabilizing those surfaces first prevents stale documentation from driving later implementation while preserving the approved technical roadmap.
 
-- describe only current behavior;
-- label planned behavior explicitly;
-- do not document an unimplemented callable-authority architecture as current;
-- do not edit copied documentation independently of its authority;
-- add human-oriented callouts and concepts where missing.
+**Dependencies:**
 
-**Review gate:** reading all applicable Markdown cannot reasonably cause current/planned behavior confusion.
+- W1 is accepted, closed, and fully recorded in the evidence ledger;
+- the W1 audit result and maintainer-approved W2 allowlist below are the scope authority for this pass;
+- a separate authorized W2 execution handoff supplies the exact repository state and execution lease.
+
+**Scope:**
+
+- repository: `BionicCode/workflows`;
+- read-only inspection may cover repository content needed to verify current behavior;
+- modifications are limited to the exact Markdown paths below.
+
+**Allowed files:**
+
+| Path | W2 write constraint |
+|---|---|
+| `README.md` | Current-state product and repository documentation only. |
+| `AGENTS.md` | `REPOSITORY SPECIFICS` only. |
+| `AGENT_GUARDRAILS.md` | Repository-specific overlay only. |
+| `DOCUMENTATION.md` | Repository-specific overlay only. |
+| `.github/copilot-instructions.md` | Repository-specific overlay only. |
+| `.github/instructions/code-review.instructions.md` | Repository-specific overlay only. |
+| `.github/instructions/tests.instructions.md` | Repository-specific overlay only. |
+| `src/AGENTS.md` | Repository-specific overlay only. |
+| `test/AGENTS.md` | Repository-specific overlay only. |
+| `.github/scripts/doc-metadata/README.md` | Current-state documentation only; planned behavior must be explicitly labelled. |
+| `.github/scripts/doc-metadata/tests/README.md` | Current-state documentation only; planned behavior must be explicitly labelled. |
+| `.github/scripts/sync-files-from-manifest/README.md` | Current-state documentation only; planned behavior must be explicitly labelled. |
+| `.github/tools/doc-metadata/README.md` | Current-state documentation only; planned behavior must be explicitly labelled. |
+| `.github/tools/doc-metadata/api-reference.md` | Current-state documentation only; planned behavior must be explicitly labelled. |
+| `.github/tools/doc-metadata/type-reference.md` | Current-state documentation only; planned behavior must be explicitly labelled. |
+| `.github/tools/sync-config/README.md` | Current-state documentation only; planned behavior must be explicitly labelled. |
+
+This is the exact maintainer-approved W1 allowlist for W2. Files outside this table are not writable in W2.
+
+**Prohibited files and scope:**
+
+- every path outside the exact allowlist, including this backlog, the evidence-ledger documentation, and the review protocol;
+- workflow, script, schema, manifest, installer, executable test, fixture, or package implementation;
+- shared copied instruction baselines outside the designated repository-specific overlays;
+- new documentation paths or an independently edited copy whose authoritative source requires a coordinated change.
+
+**Required outputs:**
+
+- corrected or quarantined stale and contradictory statements within the allowlist;
+- explicit current, planned, historical, copied, and generated labels wherever authority or timing could otherwise be confused;
+- human-oriented concepts, callouts, and cross-links needed to understand current behavior without presenting future architecture as implemented;
+- an execution report that accounts for every allowlisted path, including paths intentionally left unchanged.
+
+**Required invariants:**
+
+- current-behavior claims match the exact repository state leased to W2;
+- planned callable-authority, packaging, ownership, migration, and other future behavior remains explicitly planned;
+- copied documentation is not edited independently of its authority;
+- shared copied instruction baselines remain unchanged and only repository-specific overlays may vary;
+- approved architecture, product behavior, pass order, pass identity, and accepted W0/W1 evidence remain unchanged;
+- W2A and every later pass remain `Locked`.
+
+**Non-goals:**
+
+- implementing or changing workflow, script, schema, manifest, installer, package, fixture, or executable test behavior;
+- deciding the W2A workflow naming and migration map;
+- rewriting shared copied instruction baselines;
+- widening the W1 allowlist, creating a new technical roadmap, or extracting specifications into new files;
+- completing, closing, unlocking, or activating W2, W2A, or any later pass.
+
+**Acceptance criteria:**
+
+- each of the 16 allowlisted paths is accounted for and any changed statement is supported by current repository evidence;
+- reading the applicable allowlisted Markdown cannot reasonably confuse current, planned, historical, copied, or generated behavior;
+- instruction-file changes, if any, are confined to the named repository-specific overlays;
+- the complete diff is documentation-only, remains inside the exact allowlist, and preserves all required invariants;
+- required callouts and links are understandable to a human reader and resolve correctly.
+
+**Validation:**
+
+- compare every current-behavior statement changed by W2 with the exact leased repository implementation;
+- account for all 16 allowlisted paths and verify the changed-file set is a subset of that list;
+- inspect copied instruction diffs against their repository-specific overlay boundaries;
+- validate Markdown structure and relative links for every changed file;
+- search changed documentation for unlabelled future behavior and stale current-state claims;
+- run `git diff --check`;
+- review the complete diff against the W1 audit and this pass contract.
+
+**Stop conditions:**
+
+- a required correction needs a path outside the exact allowlist or a shared copied baseline change;
+- current behavior cannot be established from the leased repository state;
+- a product, architecture, naming, authority, or migration decision is required;
+- documentation and implementation cannot be made accurate without changing executable behavior;
+- the leased repository state changes, unrelated worktree changes appear, or another applicable instruction conflicts with this scope.
+
+**Review gate:** the maintainer independently approves the exact documentation diff, the 16-path accounting, current-versus-planned classification, overlay-boundary review, link checks, and complete execution report.
+
+**Follow-up effect:** after W2 is independently accepted, closed, and fully finalized, W2A may become eligible for separate preparation and activation. W2 does not activate or unlock W2A or any later pass.
 
 ---
 
@@ -1146,27 +1242,23 @@ After convergence:
 
 No automated merge is authorized.
 
-## 7. Deferred post-recovery design
+## 7. Deferred post-recovery candidates
 
-### F1 — Single-boundary marker support
+F1 through F3 are proposal identifiers outside the admitted recovery roadmap, ordered pass index, and current evidence ledger. They have no current completion status and require a future admission review, formal pass contract, ordering decision, and explicit activation before execution. They do not block the recovery completion definition in section 8 unless a later governance update explicitly promotes them into the roadmap.
 
-- [ ] **Completed**
+### F1 candidate — Single-boundary marker support
 
 Allow one physical marker with virtual BOF/EOF boundary. Requires schema, parser, composition, migration, tests, and human docs.
 
 Do not make recovery depend on it.
 
-### F2 — Hierarchical manifest imports and provenance
-
-- [ ] **Completed**
+### F2 candidate — Hierarchical manifest imports and provenance
 
 Design schema-level policy imports with declaring-repository provenance, cycle detection, depth limits, duplicate conflict handling, and A→B→C diagnostics.
 
 Do not implement raw textual fences inside JSON.
 
-### F3 — Performance and dependency hardening
-
-- [ ] **Completed**
+### F3 candidate — Performance and dependency hardening
 
 Only after correctness:
 
