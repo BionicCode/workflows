@@ -1228,7 +1228,7 @@ Recovery is complete only when:
 |---|---|---|---|---|---|---|---|
 | W0 | Completed | `a64ef89537304f81466acfcbdd63a187fe74ce51` | `ed8b11288b89a5f0aca2c1551e2d8bdb1606c8a8` | 4 | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` | Three-file scope review; Markdown/link checks; `git diff --check` | BionicCode |
 | W1 | Completed | `af639f43688bfd136b1dbdf051cc07bb7c588068` | N/A — review-only; no repository change | 8 | `9abed50a87fafb80157cab636fd73de018f3c5ea` | 30/30 tracked Markdown audited; lease, ancestry, merge-base, and bookkeeping diff verified; 20 local targets and 3 anchors resolved; static workflow/script/schema/manifest/example audit; `git diff --check` PASS; PowerShell suite and GitHub Actions not run; sync tests executed 0 tests because `jsonschema` was unavailable | BionicCode |
-| W2 | Pending |  |  |  |  |  |  |
+| W2 | Locked |  |  |  |  |  |  |
 | W2A | Locked |  |  |  |  |  |  |
 | W2B | Locked |  |  |  |  |  |  |
 | W3 | Locked |  |  |  |  |  |  |
