@@ -500,7 +500,7 @@ The current pass's pre-pass baseline is a separate execution lease. It is suppli
 
 ## W1 — Documentation authority and current-state audit
 
-- [ ] **Completed**
+- [x] **Completed**
 
 **Mode:** review-only.
 
@@ -1198,16 +1198,16 @@ Recovery is complete only when:
 
 ### Column glossary
 
-| Column | Meaning |
-|---|---|
-| `Pass` | Stable backlog identifier. Each pass must appear exactly once and in roadmap order. |
-| `Status` | Maintainer-controlled progression state: `Locked`, `Pending`, or `Completed`. |
-| `Pre-pass baseline SHA` | Exact repository snapshot after prerequisite maintenance is complete and immediately before pass-specific work begins. It is the pass rollback/comparison point and execution lease; it is not Git's merge base. |
-| `Result SHA` | Commit containing the reviewed pass result that landed on the target branch. |
-| `PR #` | Pull request that delivered the result, or explicit `N/A` when no PR was used. |
-| `Ledger closure SHA` | Later maintainer-controlled commit that records accepted evidence, checks the pass complete, and unlocks the next pass. It may equal the result SHA when closure was recorded in the same commit. |
-| `Tests/runs` | Concise references to the validation and review evidence accepted for closure. |
-| `Reviewer` | Maintainer or reviewer who accepted the review gate and closed the pass. |
+| Column | Meaning | Population timing |
+|---|---|---|
+| `Pass` | Stable backlog identifier. Each pass must appear exactly once and in roadmap order. | Predefined. |
+| `Status` | Maintainer-controlled progression state: `Locked`, `Pending`, or `Completed`. | Predefined as `Locked`. Transitions to `Pending` after merge into `main` and before branching from `main` (ideally modified together with the `Pre-pass baseline SHA` column). Transitions to `Completed` after pass and before merge into `main`. |
+| `Pre-pass baseline SHA` | Exact repository snapshot after prerequisite maintenance is complete and immediately before pass-specific work begins. It is the pass rollback/comparison point and execution lease; it is not Git's merge base. | After closing the previous pass and directly before branching from `main`. If maintenance took place in the new branch, then the current `HEAD` is used before the pass starts. |
+| `Result SHA` | Commit containing the reviewed pass result that landed on the target branch. Value is *"N/A — review-only; no repository change"* if the pass was a pure review pass. | After pass but before merge into `main`. |
+| `PR #` | Pull request that delivered the result, or explicit `N/A` when no PR was used. | After merge into `main`. |
+| `Ledger closure SHA` | Later maintainer-controlled commit that records accepted evidence, checks the pass complete, and unlocks the next pass. It may equal the result SHA when closure was recorded in the same commit. | After merge into `main`. |
+| `Tests/runs` | Concise references to the validation and review evidence accepted for closure. | After pass but before merge into `main`. |
+| `Reviewer` | Maintainer or reviewer who accepted the review gate and closed the pass. | After pass but before merge into `main`. |
 
 ### Status glossary
 
@@ -1222,7 +1222,7 @@ The pre-pass baseline is supplied literally in the current task handoff. It must
 | Pass | Status | Pre-pass baseline SHA | Result SHA | PR # | Ledger closure SHA | Tests/runs | Reviewer |
 |---|---|---|---|---|---|---|---|
 | W0 | Completed | `a64ef89537304f81466acfcbdd63a187fe74ce51` | `ed8b11288b89a5f0aca2c1551e2d8bdb1606c8a8` | 4 | `f0005ad6a23431bbac4e2e2c6955a6d59a9437cb` | Three-file scope review; Markdown/link checks; `git diff --check` | BionicCode |
-| W1 | Pending | `b6806780df871baf00cc5469b40550cf71abc51e` |  |  |  |  |  |
+| W1 | Completed | `af639f43688bfd136b1dbdf051cc07bb7c588068` | N/A — review-only; no repository change |  |  | 30/30 tracked Markdown audited; lease, ancestry, merge-base, and bookkeeping diff verified; 20 local targets and 3 anchors resolved; static workflow/script/schema/manifest/example audit; `git diff --check` PASS; PowerShell suite and GitHub Actions not run; sync tests executed 0 tests because `jsonschema` was unavailable | BionicCode |
 | W2 | Locked |  |  |  |  |  |  |
 | W2A | Locked |  |  |  |  |  |  |
 | W2B | Locked |  |  |  |  |  |  |
