@@ -1196,7 +1196,7 @@ Recovery is complete only when:
 
 ## 9. Evidence ledger
 
-**See [evidence-ledger-documentation.md](/evidence-ledger-documentation.md) for details.**
+**See [evidence-ledger-documentation.md](evidence-ledger-documentation.md) for details.**
 
 | Pass | Status | Pre-pass baseline SHA | Result SHA | PR # | Ledger closure SHA | Tests/runs | Reviewer |
 |---|---|---|---|---|---|---|---|
