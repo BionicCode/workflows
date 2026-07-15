@@ -1313,7 +1313,11 @@ Recovery is complete only when:
 > is created from exactly that commit. This avoids the historical W1
 > bookkeeping arrangement.
 
-
+> [!IMPORTANT]
+> The backlog index table [ordered pass index](#ordered-pass-index) must be kept in sync wwith this ledger table:  
+> **Every ledger `Status` transition must update the matching index row's `Status` in the same coordination commit.**
+>
+> The index is navigational, not a second state authority. Its pass identity, order, and displayed status must mirror the authoritative ledger. Treat any disagreement as a blocking control-plane contradiction.
 
 | Pass | Status | Pre-pass baseline SHA | Result SHA | PR # | Review-gate closure SHA | Tests/runs | Reviewer |
 |---|---|---|---|---|---|---|---|
