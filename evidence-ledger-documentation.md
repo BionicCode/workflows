@@ -46,6 +46,11 @@ The evidence ledger and its supporting documentation do not independently author
 | `Tests/runs`              | Concise accepted validation and review evidence                               | At review acceptance                                     | In the review-gate closure commit                  |
 | `Reviewer`                | Maintainer or reviewer who accepted the review gate                           | At review acceptance                                     | In the review-gate closure commit                  |
 
+> [!IMPORTANT]
+> When the owning backlog includes the reusable [ordered pass index](backlog-workflow-documentation.md#86-ordered-pass-index), every ledger `Status` transition must update the matching index row's `Status` in the same coordination commit.
+>
+> The index is navigational, not a second state authority. Its pass identity, order, and displayed status must mirror the authoritative ledger. Treat any disagreement as a blocking control-plane contradiction.
+
 ### Special values
 
 For a pure review pass that produces no repository result commit, use:
