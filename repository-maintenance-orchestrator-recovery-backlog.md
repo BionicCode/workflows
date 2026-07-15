@@ -448,7 +448,7 @@ This index is navigation, not a second evidence ledger. The status values mirror
 |---|---|---|---|---|
 | W0 | Adopt authoritative coordination files | coordination | — | Completed |
 | W1 | Documentation authority and current-state audit | review-only | W0 | Completed |
-| W2 | Stabilize current-state documentation before Codex implementation | implementation | W1 | Locked |
+| W2 | Stabilize current-state documentation before Codex implementation | implementation | W1 | Pending |
 | W2A | Approve workflow role naming and migration map | planning | W2 | Locked |
 | W2B | Apply workflow filename and reference migration | implementation | W2A | Locked |
 | W3 | Contain broken Workflows self-orchestration | implementation | W2B | Locked |
