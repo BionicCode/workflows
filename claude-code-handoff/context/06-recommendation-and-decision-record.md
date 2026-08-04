@@ -16,7 +16,7 @@ The prior Codex assessment recommended:
 
 > Migrate to Claude Code now, but migrate at the pre-W2 recovery boundary rather than presenting W2 as execution-ready.
 
-Claude's first assignment should be a source-grounded, read-only reconstruction of W1 evidence and a full integrity review of the current backlog. Protected corrections, a fresh branch/lease, and actual W2 work should follow only after maintainer review.
+Claude's first user-invoked assignment should be a source-grounded, read-only authentication of the recovered W1 report plus a post-W1/current-state integrity review of the backlog. Protected corrections, a fresh branch/lease, and actual W2 work should follow only after maintainer review.
 
 This recommendation is intentionally non-binding. Claude should reconstruct the reasoning below, challenge its premises, and offer a safer or simpler alternative if fresh evidence supports one.
 
@@ -29,7 +29,7 @@ Assessment: unsafe.
 Reasons:
 
 - nine of 16 allowed paths are fabricated;
-- the detailed W1 result is unavailable;
+- the recovered detailed W1 result has not yet been independently authenticated or reconciled with post-W1/current state;
 - W2's branch was not created from the current activation commit;
 - no valid current execution handoff/lease exists;
 - the local and live remote state are not freshly reconciled.
@@ -40,7 +40,7 @@ Assessment: insufficient.
 
 Reasons:
 
-- there is no evidence-backed one-to-one replacement map;
+- the recovered report supplies a historical set, not an evidence-backed one-to-one rename map or automatic current scope;
 - real documentation trees contain many files omitted from the table;
 - a confirmed hallucination in an authoritative source creates a semantic trust problem beyond literal path existence;
 - the branch/lease problem would remain;
@@ -59,7 +59,7 @@ Reasons:
 - the corruption was introduced after W1;
 - rewriting W1 history would obscure the later GPT failure.
 
-The missing evidence should be reconstructed, and the post-W1 corruption should be corrected through an explicit maintenance/follow-up/governance mechanism chosen by the maintainer.
+The recovered evidence should be authenticated and preserved as historical evidence, and the post-W1 corruption should be corrected through an explicit maintenance/follow-up/governance mechanism chosen by the maintainer.
 
 Claude should still examine whether the project's current rules require a formal reopening procedure or a new inserted pass. It should not assume the label in advance.
 
@@ -84,20 +84,22 @@ Benefits:
 
 ## 4. Recommended sequence
 
-### Phase A: migration and read-only reconstruction
+### Phase A: migration and read-only authentication
 
 Claude receives:
 
 - the real local Workflows checkout;
 - stable `CLAUDE.md`/`AGENTS.md` instructions;
 - this context pack;
-- a read-only first task.
+- an explicitly user-issued read-only first task from the inert prompt directory.
 
 It independently verifies:
 
 - local and remote Git state;
 - instruction/control-plane precedence;
-- W1 baseline and 30-file corpus;
+- recovered-source hashes and provenance limits;
+- W1 contract, baseline, 30-file corpus, report table, evidence claims, and later closure;
+- the recovered historical 16-path proposal versus the different current table;
 - two post-W1 steering documents;
 - every backlog current-state and exact-path claim;
 - W2 allowlist and branch provenance;
@@ -142,13 +144,13 @@ All should be true or explicitly waived by the maintainer:
 
 1. Every backlog statement classified as current has repository evidence.
 2. Every literal current path exists; planned/historical paths are labelled.
-3. The reconstructed W1 authority map is reviewable.
-4. The real W2 allowlist names only verified paths and explains each inclusion.
+3. The recovered W1 authority map has been independently authenticated to a stated confidence and its limitations are reviewable.
+4. The maintainer-selected current W2 allowlist names only verified paths, explains each inclusion, and preserves the historical report without silently rewriting it.
 5. Other GPT-introduced backlog changes have been audited.
 6. The protected correction is accepted and recorded at an exact commit.
 7. Index and ledger agree in the same commit.
 8. Local target branch and actual remote state are reconciled.
-9. Working-tree exceptions, including `CLAUDE.md`, are explicitly resolved or included in the lease.
+9. Any working-tree exception is explicitly resolved or included in the lease; the former untracked-`CLAUDE.md` condition remains historical rather than a current assumption.
 10. The W2 branch originates at the accepted activation commit.
 11. The execution handoff states exact repository, target, branch, baseline, expected HEAD, allowed/prohibited files, validation, and stop conditions.
 12. The current prompt explicitly authorizes W2 execution.
@@ -174,8 +176,9 @@ The archive preserves evidence; it does not become a second roadmap, execution l
 
 Claude should recommend a different sequence if fresh evidence proves, for example:
 
-- the original W1 audit result exists in a recoverable authoritative source;
-- a real accepted W2 allowlist exists elsewhere and can be authenticated;
+- the recovered W1 export fails material authentication checks;
+- a different accepted W2 allowlist or protected correction exists elsewhere and can be authenticated;
+- post-W1/current implementation changes make the historical proposed set incomplete or stale;
 - the remote W2 branch was recreated from a valid activation commit in history unavailable to this assessment;
 - current remote state already contains an accepted governance repair;
 - the maintainer intentionally established a different reopening or maintenance mechanism;

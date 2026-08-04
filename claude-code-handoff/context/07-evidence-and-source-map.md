@@ -10,8 +10,9 @@ Use this order when validating the pack:
 4. executable implementation/tests/schemas/manifests;
 5. applicable repository instructions;
 6. accepted durable review artifacts;
-7. this migration pack;
-8. prior chat summaries and commit messages.
+7. authenticated recovered historical sources under `../sources/`;
+8. this migration pack;
+9. prior chat summaries and commit messages.
 
 The pack intentionally contains user-confirmed provenance that Git cannot prove by itself. Keep that testimony identified rather than turning it into an unexplained repository fact.
 
@@ -153,7 +154,27 @@ these conditions after Phase 3 rather than treating them as permanent claims.
 README.md
 ```
 
-## 4. W1 source artifact
+## 4. W1 source artifacts
+
+### Recovered final response
+
+The August 4 user export supplies:
+
+```text
+claude-code-handoff/sources/W1-final-audit-report.txt
+```
+
+ZIP-entry SHA-256:
+
+```text
+4afa74679b22197a392341750235767e598f74a756e4b0b84cff85e842a69129
+```
+
+The user identifies it as the exact exported original W1 final response. Its baseline, 30-row inventory, commit relationship, and historical proposed allowlist are strongly corroborated by local repository/Git evidence. That attribution remains user-supplied rather than cryptographically provable. See `../sources/README.md` for installed-byte hashes, terminal-LF normalization, classification, and precedence.
+
+This artifact makes the historical response available. It does not authorize W2, prove the correct current scope, or replace authentication against the execution contract and closure history.
+
+### W1 execution contract
 
 The old ChatGPT project mirror contained:
 
@@ -174,14 +195,22 @@ Verified content:
 
 It does **not** contain the final audit table or findings.
 
-The PDF was text-extracted with `pdfplumber` and rendered with Poppler. Pages 1 and 6 were visually inspected to confirm title, lease content, and audit-table layout.
+The PDF was text-extracted with `pdfplumber` and rendered with Poppler during the earlier assessment. Pages 1 and 6 were visually inspected to confirm title, lease content, and audit-table layout. The user-supplied ZIP contains it as external entry `sources/W1-execution-handoff.pdf` with SHA-256 `14b0f7a3bfbe2b7584cdcf961ff49237259b8a652e1923337e4d97e9829d61cc`; it is intentionally not vendored here.
 
-## 5. Independent strategy review artifact
+## 5. Recovered governance and strategy artifacts
 
-The old project mirror also contained:
+### Planning and governance acceptance
+
+[`../sources/W1-planning-and-handoff.txt`](../sources/W1-planning-and-handoff.txt) is historical planning evidence. It contains the erroneous reconstructed 16-path list, says the definitive W1 report remains the source of truth, and requires stopping on a discrepancy.
+
+[`../sources/backlog-governance-acceptance-review.txt`](../sources/backlog-governance-acceptance-review.txt) is the later acceptance review. Its structural governance findings remain useful, but its conclusion that the persisted W2 table faithfully represented exact W1 scope is superseded.
+
+### Independent strategy review
+
+The recovered source set contains:
 
 ```text
-C:\Users\Mobil\.codex\.chatgpt-projects\g-p-6a50cf8284008191800cbfe6d163fb7f\sources\independent-technical-strategy-review(2).md
+claude-code-handoff/sources/independent-technical-strategy-review.md
 ```
 
 Review date: 2026-07-15.
@@ -264,9 +293,13 @@ At the revalidated pre-change HEAD `8a2cf838...` on 2026-08-04:
 43 tracked Markdown files
 ```
 
-This handoff update adds `09-engineering-evidence-archive-activation.md` to the
-working tree. Recount at the exact reviewed result rather than treating either
-historical count as a future invariant.
+At the reconciliation-installation baseline `edff99aa17db08599e68cfce6e57ebc9168797c3` on 2026-08-04:
+
+```text
+44 tracked Markdown files
+```
+
+That commit includes `09-engineering-evidence-archive-activation.md`. The current reconciliation adds and moves additional handoff Markdown in the working tree. Recount at the exact reviewed result rather than treating any dated count as a future invariant.
 
 Added after W1:
 
@@ -288,7 +321,7 @@ This independently supports the user's statement that they never existed. It doe
 - PR #8: `https://github.com/BionicCode/workflows/pull/8`
 - Claude Code project memory/import behavior: `https://code.claude.com/docs/en/memory`
 
-The PR was inspected read-only and did not expose the missing W1 audit.
+The PR was inspected read-only and did not expose the full W1 audit.
 
 ## 10. Verification limitations
 
@@ -298,7 +331,7 @@ The PR was inspected read-only and did not expose the missing W1 audit.
 - No Workflows build, executable test suite, formatter, or workflow was run; this focused handoff update uses documentation, link, SHA, and diff checks only.
 - No template-caller checkout was revalidated in the current migration task.
 - No live Actions settings, branch protection, credentials, or private-source fixtures were inspected.
-- The full W1 result is unknown.
+- The full candidate W1 response is now available, but its exported-original provenance and material line-level claims have not yet received the independent authentication required by the first user-invoked task.
 - The exact earlier GPT session that generated each backlog sentence is not mechanically recoverable from Git.
 - A bounded path scan cannot establish semantic backlog integrity.
 - The Codex memory registry contained no Workflows-specific entry; this pack relies on repository evidence, supplied project artifacts, current conversation context, and the maintainer's correction.
@@ -309,8 +342,8 @@ The PR was inspected read-only and did not expose the missing W1 audit.
 These should be independently reviewed:
 
 - migrating now is preferable to repairing everything before migration;
-- a read-only pre-W2 audit is the best Claude onboarding task;
-- W1 should remain closed while its evidence is reconstructed;
+- a read-only authentication and pre-W2 integrity audit is the best first user-invoked Claude task;
+- W1 should remain closed while its recovered evidence is authenticated and later corruption is repaired;
 - a fresh W2 branch is safer than reusing the existing branch;
 - the exact future Engineering Evidence Archive activation prerequisites have been satisfied when the maintainer gives the green light;
 - the backlog's obvious missing-path blast radius may be limited to the known nine;

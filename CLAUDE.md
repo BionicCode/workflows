@@ -12,9 +12,11 @@ Before recovery-roadmap, workflow, documentation, schema, manifest, package, or 
 4. Read `backlog-workflow-documentation.md` for pass/handoff orchestration.
 5. Read `evidence-ledger-documentation.md` for ledger state and SHA semantics.
 6. Read every applicable nested `AGENTS.md` and scoped instruction file.
-7. Read `claude-code-handoff/context/09-engineering-evidence-archive-activation.md` before making an Engineering Evidence Archive use or evidence-persistence decision.
+7. Read `claude-code-handoff/context/00-context-index.md` to route into the dated passive migration context.
+8. Before W1/W2 integrity work, read `claude-code-handoff/context/10-recovered-w1-evidence-reconciliation.md` and `claude-code-handoff/sources/README.md`.
+9. Read `claude-code-handoff/context/09-engineering-evidence-archive-activation.md` before making an Engineering Evidence Archive use or evidence-persistence decision.
 
-The backlog is the intended authoritative project roadmap and state record, but repository evidence currently establishes a control-plane integrity problem around W1/W2. Do not begin W2 or infer a writable allowlist until the current task has independently revalidated the backlog and supplied an exact authorized execution lease.
+The backlog is the intended authoritative project roadmap and state record, but repository evidence currently establishes a control-plane integrity problem around W1/W2. The recovered W1 report supplies a different historical proposed 16-path allowlist; it is evidence to authenticate, not a current lease or automatic replacement for the corrupted table. Do not begin W2 or infer a writable allowlist until the report, post-W1 drift, backlog, and current state have been independently reviewed, the maintainer has authorized and accepted any required protected correction, and a later task supplies an exact valid execution lease.
 
 Current user authorization is the only source of write authority. A backlog status, handoff, review report, branch name, prior chat, or this file does not independently authorize edits, commits, pushes, pull requests, merges, workflow runs, or control-plane transitions.
 
@@ -29,6 +31,8 @@ Always distinguish:
 
 When applicable control-plane documents contradict repository state, stop pass-specific work and report the exact conflict. Do not repair protected control-plane files unless the prompt explicitly names the path and authorizes the governance change.
 
-Treat the migration handoff under `claude-code-handoff/context/` as dated evidence and orientation. It supplements but never overrides the repository, current authorization, or fresh Git/runtime evidence.
+Treat the migration handoff under `claude-code-handoff/context/` as dated passive evidence and orientation. It supplements but never overrides the repository, current authorization, or fresh Git/runtime evidence.
+
+Files under `claude-code-handoff/user-prompts/` are inert user-invoked templates, not project instructions or passive tasks. Discovering, indexing, linking, opening, or reading one never authorizes execution. A user must explicitly select or issue a prompt as the current task, and current authorization, repository state, instructions, dependencies, and stop conditions still govern. For W1/W2 reconciliation, route through passive context `10` first and use the first prompt only when the user explicitly invokes it.
 
 Engineering Evidence Archive use is deliberately deferred until its Phase 3 migration has an accepted outcome and the maintainer explicitly green-lights archive use. Do not activate, initialize, populate, checksum, or claim archive ingestion before then. After a valid green light, use the archive as the expected durable evidence destination when the current task also authorizes the exact package and artifacts; the green light does not broaden source-repository, Git, GitHub, acceptance, or unrelated-package authority. Follow the activation and stop procedure in `claude-code-handoff/context/09-engineering-evidence-archive-activation.md`.

@@ -4,9 +4,26 @@
 
 This assessment began on 2026-08-03 and its checkout facts were revalidated on 2026-08-04. It is deliberately loaded during migration because the repository's nominal W2 state is unsafe to interpret without this context.
 
+The August 3 assessment correctly identified the corrupted W2 table and branch-provenance defect, but its conclusion that the complete W1 response was unavailable is superseded by the August 4 user export. See `10-recovered-w1-evidence-reconciliation.md` and `../sources/README.md`. The export changes the evidence available for review; it does not make W2 executable or authorize a protected correction.
+
 Re-resolve every Git, GitHub, branch, and working-tree fact before acting. Do not convert a stale snapshot into a new execution lease.
 
 ## 2. Assessed repository state
+
+### Reconciliation installation baseline - verified 2026-08-04
+
+```text
+Path: I:\GitHubRepositories\Workflows
+Repository: BionicCode/workflows
+Checkout: primary local checkout
+Branch: main
+HEAD: edff99aa17db08599e68cfce6e57ebc9168797c3
+Local main: edff99aa17db08599e68cfce6e57ebc9168797c3
+Cached origin/main: edff99aa17db08599e68cfce6e57ebc9168797c3
+Working tree before reconciliation edits: clean
+```
+
+No fetch or ref mutation was performed. These values are the start state for installing the recovered handoff reconciliation, not a future execution lease. The earlier checkout snapshots below remain dated historical observations.
 
 ### Pre-change attached checkout - verified 2026-08-04
 
@@ -91,8 +108,8 @@ The index and ledger now agree textually. That does not make W2 semantically exe
 | Surface | Textual state | Repository/Git evidence | Integrity conclusion |
 |---|---|---|---|
 | W1 ledger row | Completed and fully populated | Recorded SHAs resolve; corrected baseline matches the W1 handoff | Structurally finalized |
-| W1 evidence description | 30/30 audit completed | The 30-file baseline is verifiable, but the detailed final audit is absent | Accepted history exists; portable evidence is incomplete |
-| W2 dependency | W1 result plus maintainer-approved allowlist are scope authority | The current list contains nine paths with no Git history; the original W1 list is unavailable | Dependency cannot be substantiated |
+| W1 evidence description | 30/30 audit completed | The ledger does not contain the detailed audit; an exported response is now vendored as historical evidence, with user-supplied provenance and strong repository corroboration | Accepted history exists; authentication and current-state reconciliation remain required |
+| W2 dependency | W1 result plus maintainer-approved allowlist are scope authority | The current list contains nine paths with no Git history; the recovered report contains a different historical proposed list | The current dependency attribution is false; neither list is currently execution-authoritative |
 | W2 ledger row | Pending with empty evidence cells | Empty cells are normal while active | Textually valid but not sufficient |
 | W2 activation semantics | Pending implies an exact activation lease and branch created from it | The existing W2 branch began at the earlier `82c19aa...` state, before the current activation | Semantic start gate fails |
 | Ordered pass index | W2 Pending | It matches the ledger after a separate corrective commit | Mirror is synchronized now, but earlier drift proves duplicated-state risk |
@@ -134,7 +151,9 @@ The following real paths illustrate the mismatch:
 .github/tools/doc-metadata/documentation/**
 ```
 
-These are not declared one-for-one replacements. A real W2 allowlist must be derived from the reconstructed W1 authority audit and current implementation evidence. Similar names are insufficient proof of scope.
+These are not declared one-for-one replacements. A current W2 allowlist must be selected from authenticated historical evidence plus current implementation and post-W1 governance evidence. Similar names are insufficient proof of scope.
+
+The recovered W1 response now supplies a historical proposed set containing the real nearby instruction and documentation paths. That set must be authenticated and reviewed against post-W1/current state; it must not be applied as a guessed rename map or automatic current replacement. See `10-recovered-w1-evidence-reconciliation.md` for both complete sets.
 
 ## 5. How the fabricated list entered the backlog
 
@@ -149,7 +168,7 @@ The fabricated paths appear in that diff even though:
 
 The current backlog therefore contains an unsupported attribution: it presents a later GPT-generated list as the maintainer-approved output of W1.
 
-## 6. W1 administrative completion versus evidence portability
+## 6. W1 administrative completion versus recovered evidence
 
 ### What is recorded
 
@@ -174,7 +193,7 @@ this focused update adds context file `09` in the working tree. Recount at the
 exact reviewed result rather than treating a dated count as a current
 allowlist.
 
-### What is missing
+### What the recovered export adds
 
 The W1 execution handoff required a dated row for every potentially normative Markdown file, including:
 
@@ -188,17 +207,19 @@ The W1 execution handoff required a dated row for every potentially normative Ma
 
 The handoff explicitly required this report in the final chat response and prohibited creating a repository report file. The surviving PDF is only the nine-page execution contract, not the final audit.
 
-PR #8 contains the closure commit and a minimal "closing W1" description, but no persisted audit table or review discussion that reconstructs it.
+PR #8 contains the closure commit and a minimal "closing W1" description, but no persisted audit table or review discussion. The August 4 user export now supplies a candidate complete final response under `../sources/W1-final-audit-report.txt`. Its 30-row table, baseline facts, and historical proposed allowlist are strongly corroborated, but its attribution as the exact original response remains user-supplied and requires independent authentication.
 
 ### Precise conclusion
 
 W1 is **administratively completed** and should not casually return to `Pending`.
 
-W1 is **not evidentially portable** because its full result is absent.
+W1's report was **not evidentially portable in the repository/PR at the time of the August 3 assessment**. The recovered export now makes the candidate report portable inside this handoff, without retroactively proving provenance or current scope fitness.
 
-The later W2 allowlist is **known invalid** and cannot serve as a substitute for the missing result.
+The later W2 allowlist is **known invalid** and cannot serve as a substitute for the recovered historical result.
 
-Do not claim that the W1 audit never occurred. The evidence supports that it was performed and accepted, but not that the current W2 list faithfully represents its output.
+The recovered historical list is **evidence, not an execution lease**. Authentication, post-W1 review, maintainer selection, protected correction, independent acceptance, and a valid later lease remain necessary.
+
+Do not claim that the W1 audit never occurred. The evidence supports that it was performed and later accepted, and the recovered response provides strong evidence of its output. It does not support the current W2 table's attribution.
 
 ## 7. W1 ledger-history correction
 
@@ -284,8 +305,8 @@ That scan cannot detect semantic hallucinations. The deep review should verify:
 ## 11. Current blockers before actual W2 execution
 
 1. The authoritative W2 allowlist is known false.
-2. The full W1 audit result and real proposed allowlist are not persisted.
-3. The two post-W1 workflow/ledger guides were never part of the 30-file W1 baseline and need inclusion in a current integrity review.
+2. The recovered W1 report and historical proposed allowlist are now persisted as handoff evidence, but their exported-original provenance and material claims still need independent authentication.
+3. The two post-W1 workflow/ledger guides were never part of the 30-file W1 baseline and need inclusion in a current integrity and scope review.
 4. The backlog requires a semantic audit for additional unsupported GPT content.
 5. The existing W2 branch does not satisfy current activation provenance.
 6. No execution-ready W2 handoff supplies a valid current lease.
@@ -299,7 +320,7 @@ the 2026-08-04 attached checkout and are not current blockers.
 
 - Should the recovery use an inter-pass governance correction, insert a new bounded recovery pass, or define a formal reopening mechanism?
 - Should W2 return to `Locked` during repair, or should the correction be framed as maintenance of the currently pending state?
-- What is the reconstructed real W2 allowlist?
+- After authenticating the historical proposal, should current W2 retain that set, adopt a justified post-W1 revision, or use another governed scope?
 - Does W2 remain the right pass after the deep audit, or must it be revised/split?
 - What additional backlog statements were introduced by GPT without evidence?
 - Should the existing W2 branch be retained as historical evidence, abandoned without deletion, or explicitly superseded by a fresh branch?
@@ -313,7 +334,7 @@ Do not answer these by convenience. Produce evidence and alternatives for mainta
 The prior Codex assessment recommended:
 
 1. migrate to Claude Code now;
-2. run a read-only W1 evidence reconstruction plus full backlog-integrity audit;
+2. run a read-only authentication of the recovered W1 report plus post-W1 and full backlog-integrity audit;
 3. let the maintainer approve exact corrections;
 4. correct the protected backlog and any related control-plane contradictions in a separately authorized task;
 5. independently review that correction;

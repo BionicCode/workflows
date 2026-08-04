@@ -147,7 +147,9 @@ PR #8 merged the closure.
 
 ### Evidence persistence mistake
 
-The final W1 report was intentionally kept in chat and was not persisted. PR #8 has no full audit table or review discussion. The PDF is only the handoff, not the result.
+The final W1 report was intentionally kept in chat and was not persisted in the repository or PR #8. The PDF is only the handoff, not the result. That made the report unavailable to the August 3 repository-only recovery even though W1 had occurred.
+
+On August 4 the user supplied an exported candidate original final response, now preserved under `../sources/`. Its 30-row table and historical proposed 16-path set are strongly corroborated by the baseline, but the export's originality remains user-supplied provenance that must be authenticated rather than assumed.
 
 Lesson: "return the report in chat" satisfied the immediate task but failed the long-term interruption-recovery goal. Critical review artifacts must be persisted in an authorized durable location, even when they should not become normative repository documentation.
 
@@ -188,6 +190,8 @@ Lesson: create branches only after the final prerequisite state and lease rules 
 
 ## 9. Governance normalization and the hallucinated allowlist
 
+The recovered W1 report and the later planning artifact now expose two different 16-path sets. The report's historical proposal names 16 paths that existed at the W1 baseline. `W1-planning-and-handoff.txt` reconstructed a different set with nine nonexistent names, while also warning that the definitive W1 report remained the source of truth and that a discrepancy required a stop.
+
 Commit `0fb830f92ae6f7c5933b9bace14a43e0231e9707`:
 
 - added the concise ordered pass index;
@@ -195,11 +199,13 @@ Commit `0fb830f92ae6f7c5933b9bace14a43e0231e9707`:
 - separated deferred candidates from admitted passes;
 - inserted a detailed 16-path W2 allowlist.
 
-The user confirmed that an earlier GPT session fabricated nine of those paths. Git history independently confirms that none ever existed.
+The user confirmed that an earlier GPT session fabricated nine of those paths. Git history independently confirms that none ever existed. The governance implementation persisted the erroneous reconstruction; the later acceptance review treated its internally consistent 16-row structure as sufficient, and the strategy review missed path existence.
 
 This is the most important unresolved mistake. The commit described the list as an accepted W1 scope even though the persisted repository contained no W1 audit result capable of supporting that claim.
 
 Lesson: an agent must enumerate and verify exact paths before placing them in an authoritative allowlist. A plausible repository layout is not evidence.
+
+The evidence supports a propagation chain of chat-only W1 result, erroneous reconstruction, governance implementation, acceptance-review miss, strategy-review miss, and later recovery. It does not establish whether the implementation executor received and ignored the definitive report or never had it available.
 
 ## 10. July 15: W2 toggles, missed review finding, and index drift
 
@@ -231,9 +237,9 @@ Lesson: duplicated state is hazardous even when one copy is labelled non-authori
 
 ## 12. Pause for evidence-archive work
 
-The project stopped before real W2 implementation. The user explored an Engineering Evidence Archive so future handoffs, review reports, and accepted evidence would survive project/chat migration.
+The project stopped before real W2 implementation. The user explored an Engineering Evidence Archive so future handoffs, review reports, and accepted evidence would survive project/chat migration. Recovering the W1 export on August 4 reduces one immediate evidence gap but reinforces the need for durable, provenance-aware storage.
 
-That work was motivated directly by the missing W1 result and the broader goal of evidence-led development. It is not a prerequisite for repairing the Workflows backlog. The current decision is to keep archive integration deferred, use a SHA-pinned Claude handoff now, and retain archive-ready reports plus exact pending-ingestion records until Phase 3 is accepted and the maintainer gives the explicit green light.
+That work was motivated directly by the then-unavailable W1 result and the broader goal of evidence-led development. Recovering the export later does not remove the persistence lesson. Archive activation is not a prerequisite for repairing the Workflows backlog. The current decision is to keep archive integration deferred, use a SHA-pinned Claude handoff now, and retain archive-ready reports plus exact pending-ingestion records until Phase 3 is accepted and the maintainer gives the explicit green light.
 
 Deferral does not make later use vague or optional. After a valid activation, Claude should follow `09-engineering-evidence-archive-activation.md` and persist qualifying durable evidence when the current task authorizes the exact package and artifacts. The activation does not authorize Workflows edits, Git/GitHub actions, unrelated archive packages, technical acceptance, maintainer acceptance, or source integration.
 
@@ -249,7 +255,7 @@ Workflows checkout and found the following at that time:
 - W2 branch cached at the same remote tip as `origin/main`;
 - W1 branch at `9abed50...`;
 - the nine nonexistent allowlist paths;
-- no full W1 report in the repository or PR #8;
+- no full W1 report in the repository or PR #8 at that time;
 - W2 branch reflog beginning at pre-normalization commit `82c19aa...`.
 
 These are preserved historical observations, not current checkout hints. The
@@ -257,6 +263,8 @@ These are preserved historical observations, not current checkout hints. The
 `03-current-state-and-integrity-blockers.md`.
 
 The user explicitly reminded the agent that the allowlist was hallucinated. That correction changed the blocker analysis from "missing files" to "corrupted authoritative backlog."
+
+On August 4, after that repository-side pack was prepared, the user supplied the recovered final-response export. This later evidence supersedes only the premise that the W1 response and historical proposed list are unavailable. It does not supersede the corruption, branch-provenance, current-authorization, or archive-activation boundaries.
 
 Lesson: preserve user corrections prominently. Repeating an invalid list without its provenance can cause both the user and the next agent to forget that the defect is GPT-generated, not a repository omission.
 
@@ -270,11 +278,11 @@ Lesson: preserve user corrections prominently. Repeating an invalid list without
 | Commit self-reference timing unclear | Delayed population and distinct finalization defined | Follow it consistently |
 | W2 activated before maintenance finished | Temporarily returned to Locked | Current pending state still needs semantic repair |
 | Index and ledger status diverged | Same-commit synchronization rule added | Consider one generated view or validation |
-| W1 report lived only in chat | This context reconstructs known facts | Recreate audit evidence; persist accepted artifact later |
-| GPT invented nine W2 paths | Cause now documented and Git history checked | Deep-audit backlog and replace list with evidence-backed scope |
+| W1 report lived only in chat | User export is vendored as non-normative historical evidence with hashes and provenance limits | Authenticate it; persist any later accepted evidence through an authorized durable process |
+| GPT invented nine W2 paths | Cause now documented; Git history checked; historical W1 proposal recovered | Authenticate the report, deep-audit current state, and replace the list only through authorized governance |
 | Strategy review missed basic path validity | Conclusion marked superseded | Retain useful later recommendations only after revalidation |
 | W2 branch predates current lease rules | Defect identified | Establish fresh branch/lease or approved exception |
-| Generic .NET instructions appear in non-.NET repo | W1 was tasked to classify them | Reconstruct actual authority decision and correct scope |
+| Generic .NET instructions appear in non-.NET repo | W1 was tasked to classify them | Authenticate the recovered authority finding and review current scope |
 | Product names used as workflow roles | Reusable workflow docs define roles | State role explicitly in every Claude task |
 
 ## 15. Durable lessons for Claude
@@ -291,3 +299,4 @@ Lesson: preserve user corrections prominently. Repeating an invalid list without
 10. Sophisticated analysis does not replace simple structural checks.
 11. When the authoritative source is corrupt, repair its integrity; do not silently create a competing authority.
 12. Reassess recommendations independently when their premises were later disproved.
+13. A recovered export can resolve availability without proving originality; preserve its hashes and provenance, then authenticate material claims against repository evidence.

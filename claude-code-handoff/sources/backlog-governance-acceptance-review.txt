@@ -1,0 +1,132 @@
+## 1. Verdict
+
+**Accept**
+
+The committed patch faithfully implements the authorized backlog-governance normalization. No blocking correction is required. One non-blocking newline hygiene issue remains.
+
+## 2. Resolved review state
+
+| Item | Resolved state |
+|---|---|
+| Repository | `BionicCode/workflows` — implementation authority |
+| Default branch | `main` |
+| Comparison base | [`51a5749181e2f10c80ccd6b9a37be190ee7444d3`](https://github.com/BionicCode/workflows/commit/51a5749181e2f10c80ccd6b9a37be190ee7444d3) |
+| Implementation branch/result | `main` at [`0fb830f92ae6f7c5933b9bace14a43e0231e9707`](https://github.com/BionicCode/workflows/commit/0fb830f92ae6f7c5933b9bace14a43e0231e9707) |
+| Ancestry | `ahead`, merge base exactly `51a5749…`; one commit ahead, zero behind |
+| Commit after base | `0fb830f…` — `docs(backlog): normalize governance before W2` |
+| Changed files | Exactly one: [`repository-maintenance-orchestrator-recovery-backlog.md`](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md) |
+| Diff size | 158 insertions, 66 deletions |
+| Initial/final ref state | `main` resolved to `0fb830f…` both times; final comparison was `identical` |
+| Stop conditions | None triggered |
+
+Applicable instructions read:
+
+- `AGENTS.md`
+- `AGENT_GUARDRAILS.md`
+- `DOCUMENTATION.md`
+- `.github/copilot-instructions.md`
+- `repository-review-protocol.md`
+- The actual `.github/instructions/test.instructions.md` and `dotnet.instructions.md` were inspected for applicability; neither applies to this root Markdown review.
+- No nested `AGENTS.md` applies to the root backlog path.
+
+Required evidence read:
+
+- The resulting backlog and all three governing workflow documents.
+- `work-handoff-normalize-backlog-governance-before-w2(1).md`.
+- The supplied implementation report.
+- The complete earlier conformance review, including its five blocking findings, section table, pass table, and deferred recommendations.
+
+Tools used: connected GitHub read-only repository operations, Git `2.51.1`, and an independent in-memory governance validator. A checked-out local repository was unavailable, so repository-context `git diff --check` was reproduced against the exact fetched base/result blobs with `git diff --no-index --check`.
+
+## 3. Earlier-finding disposition
+
+| Earlier material finding | Disposition | Evidence |
+|---|---|---|
+| Stale “proposed authoritative replacement” header | **Resolved** | Current authority, historical snapshot, and runtime state are separated at [lines 3–30](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L3-L30). |
+| Missing workflow, ledger, protocol, and repository-instruction navigation | **Resolved** | Governing links and all-mode handoff requirement at [lines 23–30](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L23-L30). |
+| Ledger used `Ledger closure SHA` | **Resolved** | Exact `Review-gate closure SHA` header at [line 1318](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L1318). |
+| T0–T6 combined into one ledger row | **Resolved** | Seven separate rows at [lines 1340–1346](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L1340-L1346). |
+| Locked grouped T row contained premature historical evidence | **Resolved** | Every locked row has empty evidence cells at [lines 1322–1346](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L1322-L1346). |
+| F1–F3 missing from ledger despite pass-like presentation | **Superseded by maintainer decision** | They are now explicitly non-admitted candidates without checkboxes at [lines 1245–1270](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L1245-L1270). |
+| W1 baseline incorrectly represented | **Resolved** | `3a3fe364…` remains the W1 baseline; `af639f…` is explicitly bookkeeping, not baseline/result, at [lines 1293–1321](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L1293-L1321). |
+| W2 depended on a non-durable 16-path allowlist | **Resolved** | Exact 16-path table at [lines 565–586](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L565-L586). |
+| No ordered pass index | **Resolved** | Complete W0–W17/T0–T6 index at [lines 443–475](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L443-L475). |
+| W2 lacked the formal pass contract | **Resolved** | Complete contract at [lines 543–647](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L543-L647). |
+| W0/W1 lack newer template fields | **Superseded by maintainer decision** | Pre-template historical exception at [lines 477–479](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L477-L479). |
+| W2A–T6 remain abbreviated rather than normalized contracts | **Intentionally deferred and valid** | Their identities, order, and technical content are unchanged; later normalization was explicitly excluded. |
+| Detailed architecture remains inline rather than linked specifications | **Intentionally deferred and valid** | Extraction of sections 4.2–4.9 was explicitly deferred. |
+| Duplicate status/progression/baseline/ledger rules | **Resolved** | Replaced by concise delegation at [lines 437–441](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L437-L441). |
+| Roadmap framing lacked an index and used additional Session H1 headings | **Partially resolved** | Index added; Session A/B heading hierarchy remains a valid deferred structural improvement. |
+| Missing global boundaries/non-goals and supporting-specification index | **Intentionally deferred and valid** | W2 itself now has exact boundaries/non-goals; broader document restructuring was outside this patch. |
+
+No semantic pass duplication was introduced. The previously identified W2/W14, W5/W17, W9–W12, and T2/T4 distinctions remain intact.
+
+## 4. Acceptance-criteria results
+
+| Group | Result |
+|---|---|
+| 1. Scope integrity | **Pass.** Exactly one Markdown control-plane file changed. Architecture, executable behavior, W0/W1 specifications and evidence, pass identities, titles, and order were preserved. |
+| 2. Authority and navigation | **Pass.** Current authority, historical provenance, runtime state, supporting documents, and all-mode handoff requirements are explicit. |
+| 3. Ordered pass index | **Pass.** All 27 admitted passes appear once, in roadmap order, with five required fields. Index and ledger statuses agree. |
+| 4. W2 durable contract | **Pass.** Exact 16-path list, overlay restrictions, all mandatory and applicable conditional fields, documentation-only boundary, stop conditions, and non-activation effect are present. |
+| 5. Historical and deferred treatment | **Pass.** W0/W1 history is protected without weakening ledger integrity. F1–F3 are unambiguously outside the active roadmap and completion definition. |
+| 6. Duplication and responsibilities | **Pass.** Lifecycle, activation, baseline, closure, and ledger semantics are delegated. No remaining duplicated rule was found to have drifted. Section 4.8 retains additive project-specific documentation concepts; its eventual extraction is deferred. |
+| 7. Evidence-ledger integrity | **Pass.** Zero pending; W0/W1 completed; all later passes locked; checkbox/status agreement; complete admitted-pass coverage; exact W1 evidence; separate T rows; empty locked evidence; no F rows. |
+| 8. Validation | **Pass with one non-blocking hygiene observation.** All requested semantic checks passed; the result lacks a terminal newline. |
+
+## 5. Findings
+
+### Blocking findings
+
+None.
+
+### Non-blocking findings
+
+- `[STYLE]` [`repository-maintenance-orchestrator-recovery-backlog.md`, L1346/EOF](https://github.com/BionicCode/workflows/blob/0fb830f92ae6f7c5933b9bace14a43e0231e9707/repository-maintenance-orchestrator-recovery-backlog.md#L1346): the patch removes the file’s terminal newline. This explains why the committed diff is 158 insertions/66 deletions rather than the implementation report’s 157/65. It does not affect Markdown semantics, ledger state, or `git diff --check`, and does not require another correction iteration.
+
+### Deferred improvements
+
+- Normalize W2A through T6 against the formal pass template.
+- Extract detailed architecture/contract material from sections 4.2–4.9.
+- Nest Session A/B below the roadmap instead of using additional H1 headings.
+- Add broader boundaries/non-goals and supporting-specification navigation when that structural extraction is authorized.
+
+### Uncertainty
+
+No material uncertainty. Evidence coverage includes all required repository documents, both historical project artifacts, exact Git objects, and initial/final ref verification. Confidence is high.
+
+## 6. Validation
+
+- Repository metadata/default branch resolution — **PASS**; default is `main`.
+- Initial and final `main` resolution — **PASS**; both `0fb830f…`.
+- `51a5749…` → `0fb830f…` comparison — **PASS**; exact merge base, `ahead_by: 1`, `behind_by: 0`.
+- Commit enumeration — **PASS**; only `0fb830f…`.
+- Changed-file comparison — **PASS**; exactly the authorized backlog file.
+- Complete diff inspection — **PASS**; only authority/navigation, lifecycle/index, W2 contract, F-candidate structure, and EOF newline changed.
+- Independent governance validator — **99/100 checks passed**; sole failed hygiene assertion was terminal-newline preservation.
+- Markdown structure — **PASS**; balanced fences, expected tables, stable headings/pass sections. Additional Session H1 headings are the known deferred hierarchy improvement.
+- Real relative-link validation — **PASS**; ten repository-local links resolve to the six intended documents. Example links inside fenced W15 snippets were correctly excluded.
+- Pass identity uniqueness/order — **PASS**; 27 specification rows, 27 index rows, and 27 ledger rows in identical order.
+- Index/specification/ledger correlation — **PASS**.
+- W2 allowlist duplicate/scope check — **PASS**; exactly 16 unique authorized paths.
+- W2 formal-field check — **PASS**.
+- F1–F3 structural check — **PASS**.
+- Ledger invariant check — **PASS**.
+- `git diff --no-index --check` over exact fetched base/result blobs — **PASS**; no diagnostics. Exit status `1` reflects the expected content difference.
+- `git diff --no-index --numstat` — `158 66`.
+- Executable/build/runtime tests — not run; not applicable to this documentation-only governance patch.
+
+## 7. State-change confirmation
+
+- No file was created or modified during this review.
+- No commit, push, PR/issue mutation, merge, workflow dispatch, branch operation, or repository-setting change occurred.
+- The local review workspace remained empty.
+- `main` remained `0fb830f92ae6f7c5933b9bace14a43e0231e9707`.
+- W2 remains `Locked`; all later admitted passes remain `Locked`.
+- No maintainer acceptance or W2 activation has been recorded or claimed.
+
+## 8. Maintainer recommendation
+
+The implementation may be accepted. No correction iteration is required.
+
+The reviewed commit is already on `main`, so no further commit or merge is needed for this exact state. After separate maintainer acceptance, the backlog is ready for a later, separately authorized W2 `Locked → Pending` activation transition and exact W2 execution handoff. The terminal newline can be restored opportunistically during a future authorized governance edit.

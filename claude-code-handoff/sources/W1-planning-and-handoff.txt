@@ -1,0 +1,306 @@
+A **new task inside the same project provides sufficient process isolation**, provided the review prompt requires a fresh repository-state resolution and forbids relying on the earlier task’s conclusions.
+
+The reviewer may still have access to project instructions, files, and possibly useful project context. That is not inherently harmful. Independent review means independently verifying the current diff and evidence—not necessarily forgetting that the earlier work happened.
+
+Moving the acceptance review outside the project would create stronger contextual separation, but it also removes helpful project framing and increases the chance that the reviewer misses repository-specific decisions. I would keep both tasks in the Workflows project:
+
+- **Task 1:** implement the accepted backlog findings.
+- **Task 2:** independently review the resulting repository state.
+
+Use `/memories use off` in the acceptance-review task as an additional safeguard. I cannot verify from official documentation that this guarantees removal of all project-level context, so the prompt should enforce evidence-based independence regardless.
+
+## Work implementation instruction
+
+Paste this into a **new Work task in the Workflows project**:
+
+:::writing{variant="document" id="64027"}
+# Implement accepted backlog-governance improvements
+
+Implement the accepted findings from the completed review of
+`repository-maintenance-orchestrator-recovery-backlog.md` against
+`backlog-workflow-documentation.md`.
+
+This is an implementation task. Do not review, green-light, restate, or forward
+the findings instead of applying them.
+
+## Repository state and start checks
+
+Work only in:
+
+`BionicCode/workflows`
+
+Before editing:
+
+1. Resolve the default branch and current `main` HEAD.
+2. Resolve the current working branch and HEAD.
+3. Confirm the working tree is clean.
+4. Read all applicable repository and nested instructions.
+5. Read:
+   - `repository-maintenance-orchestrator-recovery-backlog.md`;
+   - `backlog-workflow-documentation.md`;
+   - `evidence-ledger-documentation.md`;
+   - `repository-review-protocol.md`;
+   - the earlier backlog-conformance review supplied with this task.
+6. Confirm W2 and every later current-roadmap pass remain `Locked`.
+7. Report and stop if repository state, instructions, or control-plane
+   documents conflict in a way that prevents a trustworthy bounded update.
+
+Record the exact starting HEAD in the final report.
+
+## Authorization and writable scope
+
+This task explicitly authorizes modification of:
+
+- `repository-maintenance-orchestrator-recovery-backlog.md`
+
+Do not modify any other file.
+
+Do not commit, push, create or update a pull request, merge, dispatch workflows,
+delete branches, or modify repository settings unless separately authorized.
+
+## Already resolved findings
+
+Preserve these current corrections. Do not redo or reverse them:
+
+- W1’s `Pre-pass baseline SHA` is
+  `3a3fe364028db003bfc89d3a94fd8a9f167d1f35`.
+- The W1 historical note identifies
+  `af639f43688bfd136b1dbdf051cc07bb7c588068` as the approved post-baseline
+  bookkeeping commit rather than the W1 baseline.
+- The evidence-ledger column is named `Review-gate closure SHA`.
+- T0 through T6 have separate ledger rows.
+- Every locked pass has an empty pre-pass-baseline cell.
+- W2 and every later pass remain `Locked`.
+
+Treat the earlier review finding that W1 should use `af639f…` as superseded.
+The current `3a3fe364…` value must remain unchanged.
+
+## Required improvements
+
+### 1. Correct backlog authority and navigation
+
+Update the stale header wording that describes the backlog as a “proposed
+authoritative replacement.”
+
+Clearly distinguish:
+
+- the historical review snapshot date;
+- the backlog’s present authority;
+- current execution state, which is resolved separately at each task start.
+
+In the purpose and authority section, add concise links to:
+
+- `backlog-workflow-documentation.md`;
+- `evidence-ledger-documentation.md`;
+- `repository-review-protocol.md`;
+- applicable repository instructions.
+
+State that every activated pass mode—not only implementation passes—requires an
+authorized execution handoff.
+
+Do not duplicate the detailed authority rules already owned by those documents.
+
+### 2. Add a concise ordered pass index
+
+Add a compact roadmap index before the full pass specifications.
+
+For each admitted current-roadmap pass, include:
+
+- identifier;
+- title;
+- mode;
+- immediate dependency;
+- current status.
+
+The index must include W0 through W17 and T0 through T6 in their existing order.
+
+Do not use the index as a second evidence ledger. Status values must agree with
+the authoritative ledger.
+
+### 3. Make W2’s scope durable
+
+Persist the accepted W1 result needed by W2 in repository state.
+
+W2’s exact allowed Markdown paths are:
+
+- `README.md`
+- `AGENTS.md`, limited to `REPOSITORY SPECIFICS`
+- `AGENT_GUARDRAILS.md`, limited to its repository-specific overlay
+- `DOCUMENTATION.md`, limited to its repository-specific overlay
+- `.github/copilot-instructions.md`, limited to its repository-specific overlay
+- `.github/instructions/code-review.instructions.md`, limited to its repository-specific overlay
+- `.github/instructions/tests.instructions.md`, limited to its repository-specific overlay
+- `src/AGENTS.md`, limited to its repository-specific overlay
+- `test/AGENTS.md`, limited to its repository-specific overlay
+- `.github/scripts/doc-metadata/README.md`
+- `.github/scripts/doc-metadata/tests/README.md`
+- `.github/scripts/sync-files-from-manifest/README.md`
+- `.github/tools/doc-metadata/README.md`
+- `.github/tools/doc-metadata/api-reference.md`
+- `.github/tools/doc-metadata/type-reference.md`
+- `.github/tools/sync-config/README.md`
+
+Check this list against the accepted W1 evidence already available to the task.
+If the supplied accepted evidence contains a different exact path, stop and
+report the discrepancy rather than guessing.
+
+For copied instruction surfaces, authorize only repository-specific overlay
+changes. Do not authorize rewriting the shared copied baseline.
+
+### 4. Normalize W2 against the formal pass contract
+
+Rewrite W2 as an execution-ready stable pass specification while preserving its
+accepted technical intent.
+
+Make explicit:
+
+- objective;
+- mode;
+- rationale;
+- dependencies;
+- exact scope and prohibited scope;
+- required outputs;
+- required invariants;
+- non-goals;
+- acceptance criteria;
+- validation;
+- stop conditions;
+- review gate;
+- follow-up effect.
+
+W2 must remain documentation-only.
+
+It must not:
+
+- implement planned workflow, script, schema, manifest, installer, or test
+  behavior;
+- present future architecture as current behavior;
+- edit copied documentation independently of its authority;
+- broaden beyond the accepted W1 allowlist;
+- activate W2A or another later pass.
+
+### 5. Clarify treatment of W0 and W1
+
+Add a concise project-specific exception stating that W0 and W1 were accepted
+before adoption of the normalized backlog pass template.
+
+Their accepted history must not be reopened merely because their original
+inline pass specifications do not contain every field introduced later.
+
+Do not rewrite W0 or W1 as though the new template had existed when they ran.
+
+This exception does not waive ledger integrity or permit inaccurate historical
+evidence.
+
+### 6. Resolve F1 through F3 structurally
+
+Treat F1, F2, and F3 as deferred post-recovery candidates outside the active
+recovery roadmap and current evidence ledger.
+
+Clarify that:
+
+- they are not admitted current passes;
+- their checkboxes do not represent current ledger-controlled completion
+  state;
+- they require future admission review before activation;
+- they do not block the present recovery completion definition unless
+  explicitly promoted later.
+
+Prefer removing pass-style completion checkboxes or otherwise formatting them
+as deferred proposals so they cannot be mistaken for admitted ledger passes.
+
+Do not add F1 through F3 to the current evidence ledger.
+
+### 7. Reduce duplicated lifecycle rules
+
+Replace duplicated generic status, activation, closure, baseline, and ledger
+rules with concise references to:
+
+- `backlog-workflow-documentation.md`;
+- `evidence-ledger-documentation.md`;
+- `repository-review-protocol.md`.
+
+Retain only:
+
+- project-specific state;
+- project-specific exceptions;
+- project-specific sequencing or authority details.
+
+Do not remove information that is unique to this recovery program.
+
+### 8. Preserve technical roadmap decisions
+
+Do not:
+
+- reorder passes;
+- rename stable pass identifiers;
+- introduce a new technical roadmap;
+- alter approved architecture or product behavior;
+- change repository authority;
+- change accepted W0 or W1 evidence;
+- normalize W2A through T6 merely for formatting unless a minimal reference
+  correction is required by this patch;
+- extract architecture sections into new files in this task;
+- activate W2.
+
+Detailed normalization of later passes and extraction of technical
+specifications are deferred improvements.
+
+## Required validation
+
+At minimum:
+
+1. Validate Markdown structure and links.
+2. Confirm every admitted pass identifier appears exactly once in the full
+   specifications, once in the ordered index, and once in the ledger.
+3. Confirm index and ledger order agree.
+4. Confirm W2’s exact 16-path allowlist contains no duplicate or unauthorized
+   path.
+5. Confirm W2’s specification contains every mandatory formal-contract field.
+6. Confirm F1 through F3 cannot reasonably be interpreted as admitted active
+   roadmap passes.
+7. Confirm the W1 baseline and historical note remain correct.
+8. Confirm the ledger header remains `Review-gate closure SHA`.
+9. Confirm T0 through T6 remain separate.
+10. Confirm W2 and every later pass remain `Locked`.
+11. Confirm no evidence cell was populated for a locked pass.
+12. Run `git diff --check`.
+13. Perform a complete diff review against the accepted findings and the three
+    workflow documents.
+
+## Stop conditions
+
+Stop without widening the task if:
+
+- the accepted W1 allowlist cannot be reconstructed exactly;
+- a required correction needs another protected file;
+- roadmap order or technical intent must change;
+- a finding cannot be implemented without choosing an unresolved product or
+  architecture decision;
+- repository HEAD or branch state changes unexpectedly;
+- unrelated working-tree changes appear;
+- the single-file writable scope is insufficient.
+
+Return a partial report with the exact blocker.
+
+## Required final report
+
+Return:
+
+1. resolved starting state;
+2. complete change summary;
+3. section-by-section mapping from accepted finding to implemented correction;
+4. exact changed-file list;
+5. validation commands and results;
+6. findings deliberately deferred and why;
+7. any remaining blockers before W2 activation;
+8. confirmation that W2 and later passes remain `Locked`;
+9. confirmation that no repository or GitHub write action occurred beyond the
+   authorized working-tree edit;
+10. a suggested commit subject and optional body.
+
+Do not claim that the patch is accepted or that W2 is ready to activate.
+Independent review and maintainer acceptance are still required.
+:::
+
+One point to check before submitting: I reconstructed the 16-path allowlist from the accepted W1 summary available in this conversation, but the definitive W1 report should remain the source of truth. The prompt instructs Work to stop if that report differs rather than silently proceeding.

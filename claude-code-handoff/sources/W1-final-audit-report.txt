@@ -1,0 +1,325 @@
+## 1. Verdict
+
+**Acceptable for W2 scoping**
+
+This verdict concerns the completeness and trustworthiness of this W1 audit. It does not mark W1 accepted or completed and does not unlock W2.
+
+The confirmed documentation defects are appropriate W2 inputs; they do not prevent the audit from supplying a bounded, evidence-backed W2 scope.
+
+## 2. Resolved state
+
+All implementation conclusions below use the pre-pass baseline. The bookkeeping commit was inspected only to verify the lease.
+
+| Field | Resolved result |
+|---|---|
+| Repository | [`BionicCode/workflows`](https://github.com/BionicCode/workflows) |
+| Default branch | `main` |
+| Pre-pass baseline | [`3a3fe364028db003bfc89d3a94fd8a9f167d1f35`](https://github.com/BionicCode/workflows/commit/3a3fe364028db003bfc89d3a94fd8a9f167d1f35) |
+| Initial and final `main` HEAD | `3a3fe364028db003bfc89d3a94fd8a9f167d1f35` |
+| W1 branch | `docs/w1-documentation-authority-audit` |
+| Initial and final W1 HEAD | [`af639f43688bfd136b1dbdf051cc07bb7c588068`](https://github.com/BionicCode/workflows/commit/af639f43688bfd136b1dbdf051cc07bb7c588068) |
+| Merge base | `3a3fe364028db003bfc89d3a94fd8a9f167d1f35` |
+| Relationship | One commit ahead, zero behind; baseline is the sole parent and an ancestor |
+| Post-baseline commit list | Only `af639f4` — `Update repository-maintenance-orchestrator-recovery-backlog.md` |
+| Changed-file list | Only `repository-maintenance-orchestrator-recovery-backlog.md`, `+2/-2` |
+| Complete diff | W1 baseline cell changed from `b6806780df871baf00cc5469b40550cf71abc51e` to `3a3fe364028db003bfc89d3a94fd8a9f167d1f35`; final newline restored; no other content |
+| Diff hygiene | `git diff --check` passed |
+| Lease stability | Both refs remained unchanged through the final recheck |
+
+The comparison returned the expected baseline as both base and merge-base. GitHub documents its three-dot comparison as merge-base-to-head, matching the lease check used here. [GitHub branch-comparison semantics](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-comparing-branches-in-pull-requests)
+
+Working-tree state: no leased repository checkout or mutable Git worktree was exposed. The audit used immutable GitHub objects, a temporary bare clone, and a baseline archive under `/tmp`; consequently there was no staged, untracked, or uncommitted repository state in the review surface. No repository-backed file was changed.
+
+Applicable instruction and authority files:
+
+- `AGENTS.md`
+- `AGENT_GUARDRAILS.md`
+- `DOCUMENTATION.md`
+- `.github/copilot-instructions.md`
+- `.github/instructions/dotnet.instructions.md`
+- `.github/instructions/test.instructions.md`
+- `src/AGENTS.md`
+- `test/AGENTS.md`
+- `repository-maintenance-orchestrator-recovery-backlog.md`
+- `repository-review-protocol.md`
+
+No `AGENTS.override.md` exists. `src/` and `test/` contain only their respective `AGENTS.md` files.
+
+Evidence gathering used the GitHub connector for repository, branch, commit, file, and compare reads; web search against official GitHub documentation; and read-only `git ls-remote`, bare clone/archive, `rev-list`, `merge-base`, `log`, `diff`, `ls-tree`, `cat-file`, `rg`, `find`, `sed`, `nl`, and local link/anchor parsing.
+
+Unavailable or limited evidence:
+
+- `gh`, `pwsh`, `actionlint`, `yamllint`, `markdownlint-cli2`, and `markdown-link-check` were unavailable.
+- The relevant Python sync test command exited before running tests because `jsonschema` was unavailable. No dependency installation was performed.
+- The PowerShell acceptance suite was not run because `pwsh` was unavailable.
+- No workflow was dispatched, and no fresh GitHub Actions semantic execution was treated as evidence.
+- Live downstream caller repositories were not exhaustively inventoried; caller-state findings relying on the approved backlog are identified below.
+
+## 3. Inventory coverage
+
+Tracked Markdown was enumerated from the baseline commit with:
+
+```text
+git ls-tree -r --name-only 3a3fe364028db003bfc89d3a94fd8a9f167d1f35
+```
+
+The result was filtered case-insensitively for `.md` and `.markdown`.
+
+- Tracked files overall: 57
+- Tracked Markdown files: 30
+- Markdown files audited: 30
+- Excluded: 0
+- Inaccessible tracked Markdown: 0
+- Doc-metadata-governed Markdown: 28
+- Not governed by that manifest: the recovery backlog and review protocol
+
+Link/reference results:
+
+- 20 repository-local relative targets resolved.
+- Three local anchor fragments resolved.
+- One misleading target was confirmed: `DOCUMENTATION.md:34` uses `[/docs](/docs/)`, which is a site-root link rather than a repository-local documentation link. The repository’s `docs/` directory contains only `.gitkeep`.
+- Four additional parser hits were manually confirmed as the intentional `(...)` placeholders in W15’s planned-format examples, not missing dependencies.
+- One missing non-Markdown target is confirmed: `.github/workflows/repository-maintenance.yml:172` calls absent `./.github/workflows/sync-managed-files.yml`.
+- Schema, manifest, workflow, implementation, template, and test references needed to assess the documentation were inspected.
+- Absolute external links were not subjected to an exhaustive live crawl.
+
+## 4. Dated documentation-authority audit table — 2026-07-14
+
+“Metadata” below means the generated frontmatter/presentation only; it does not mean the document body is generated.
+
+| File | Document role | Classification | Authority / canonical owner | Implementation match | Contradictions or stale claims | Copied/generated relationship | Required owning pass | Evidence |
+| ---- | ------------- | -------------- | --------------------------- | -------------------- | ------------------------------ | ----------------------------- | -------------------- | -------- |
+| `.github/copilot-instructions.md` | Repository-wide Copilot fallback | Current normative; copied; stale/contradictory | Root `AGENTS.md` is declared local source of truth; shared baseline owner is **Unverified**; Workflows owns its local overlay | Mismatch | Placeholder .NET solution, `src/`, `test/`, and `docs/` layout conflicts with actual repository structure; omits current protected-control and handoff rules | Exact template copy; metadata present | W2 for local overlay; Maintainer decision required for shared baseline | [Source-of-truth declaration, L22](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/copilot-instructions.md#L22), [stale overlay, L343–368](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/copilot-instructions.md#L343-L368) |
+| `.github/instructions/dotnet.instructions.md` | Intended path-specific .NET guidance | Copied/generated; repository-inapplicable generic; stale | Shared baseline owner **Unverified**; Workflows owns only repository-specific overlay | Mismatch | No .NET project exists; routes to empty `src/`; mandates `/test` conventions; starting frontmatter has no `applyTo` | Exact template copy; metadata present | W2 overlay quarantine; Maintainer decision required for shared/frontmatter correction | [L1–26](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/instructions/dotnet.instructions.md#L1-L26), [L139–160](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/instructions/dotnet.instructions.md#L139-L160) |
+| `.github/instructions/test.instructions.md` | Intended path-specific test guidance | Copied/generated; repository-inapplicable generic; stale | Shared baseline owner **Unverified**; Workflows owns only repository-specific overlay | Mismatch | `applyTo` is in a second YAML block, not starting frontmatter; `/test` contains no tests; actual tests are tool-local | Exact template copy; metadata present | W2 overlay quarantine; Maintainer decision required for shared/frontmatter correction | [L20–39](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/instructions/test.instructions.md#L20-L39) |
+| `.github/scripts/sync-files-from-manifest/documentation/sync-manifest-api.md` | Sync manifest API reference | Current product; copied outward | Workflows | Match | None against baseline; current caller-path conflict is described in the companion guide | Metadata; body copied to callers by initializer | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/sync-manifest-api.md), [schema](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/schema/sync-manifest.schema.json) |
+| `.github/scripts/sync-files-from-manifest/documentation/sync-manifest.md` | Sync tutorial and operational guide | Current product; copied outward; cross-repository contradiction | Workflows | Match | `.github/sync-config` matches the initializer, but the approved backlog records a current caller wrapper at `.github/tools/sync-config` | Metadata; body copied to callers by initializer | W2 for state labeling; W6 for behavior/path decision | [Guide](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/sync-manifest.md), [initializer L17–20](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/init_manifest.py#L17-L20) |
+| `.github/scripts/sync-files-from-manifest/documentation/types/direction.md` | Sync enum/type reference | Current product; copied outward | Workflows | Match | None | Metadata; copied to callers | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/types/direction.md), [schema](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/schema/sync-manifest.schema.json) |
+| `.github/scripts/sync-files-from-manifest/documentation/types/lifecycle-policy.md` | Sync lifecycle reference | Current product; copied outward | Workflows | Match | None | Metadata; copied to callers | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/types/lifecycle-policy.md) |
+| `.github/scripts/sync-files-from-manifest/documentation/types/managed-scope.md` | Managed-scope reference | Current product; copied outward | Workflows | Match | None | Metadata; copied to callers | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/types/managed-scope.md), [marker implementation](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/marker_scope.py) |
+| `.github/scripts/sync-files-from-manifest/documentation/types/manifest-document.md` | Sync top-level manifest reference | Current product; copied outward | Workflows | Match | None | Metadata; copied to callers | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/types/manifest-document.md) |
+| `.github/scripts/sync-files-from-manifest/documentation/types/manifest-entry.md` | Sync entry reference | Current product; copied outward | Workflows | Match | None | Metadata; copied to callers | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/types/manifest-entry.md) |
+| `.github/scripts/sync-files-from-manifest/documentation/types/markers.md` | Marker syntax reference | Current product; copied outward | Workflows | Match | None | Metadata; copied to callers | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/types/markers.md), [runtime](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/marker_scope.py) |
+| `.github/scripts/sync-files-from-manifest/documentation/types/repo-relative-file-path.md` | Path contract reference | Current product; copied outward | Workflows | Match | None | Metadata; copied to callers | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/types/repo-relative-file-path.md), [common runtime](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/common.py) |
+| `.github/scripts/sync-files-from-manifest/documentation/types/source-selector.md` | Source selector/glob reference | Current product; copied outward | Workflows | Match | None | Metadata; copied to callers | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/types/source-selector.md), [glob runtime](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/source_glob.py) |
+| `.github/scripts/sync-files-from-manifest/documentation/types/uniqueness-policy.md` | Uniqueness policy reference | Current product; copied outward | Workflows | Match | None | Metadata; copied to callers | None | [Document](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/sync-files-from-manifest/documentation/types/uniqueness-policy.md) |
+| `.github/tools/doc-metadata/documentation/doc-metadata-manifest-api.md` | Doc-metadata manifest API reference | Current product; stale/contradictory | Workflows | Partial | Says `versioningMode` and `timestampFormat` are optional; schema and runtime require both in `defaults.metadata`; also needs explicit W14 state labeling | Metadata; locally authoritative body | W2; W14 updates behavior later | [Incorrect rows L35–49](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/documentation/doc-metadata-manifest-api.md#L35-L49), [schema L63–75](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/doc-metadata-manifest.schema.json#L63-L75), [runtime L1268–1283](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/doc-metadata/update-doc-metadata.ps1#L1268-L1283) |
+| `.github/tools/doc-metadata/documentation/doc-metadata-manifest.md` | Doc-metadata manifest guide | Current product; approved-future overlap | Workflows | Match | Correctly describes current manifest, but does not make approved W14 removal of `documentEligibility` prominent | Metadata; locally authoritative body | W2 labeling; W14 behavior update | [Guide](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/documentation/doc-metadata-manifest.md), [current manifest](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/doc-metadata-manifest.json) |
+| `.github/tools/doc-metadata/documentation/types/document-eligibility.md` | Eligibility-policy reference | Current product; planned-removal overlap | Workflows | Match | Correct now, but W14 has approved removal; current and planned state need explicit labels | Metadata; locally authoritative body | W2 labeling; W14 behavior update | [Document L20–46](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/documentation/types/document-eligibility.md#L20-L46), [W14](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/repository-maintenance-orchestrator-recovery-backlog.md#L948-L956) |
+| `.github/tools/doc-metadata/documentation/types/manifest-document.md` | Doc-metadata top-level example | Current product; stale example | Workflows | Mismatch | Example omits required `versioningMode` and `timestampFormat`, so it fails current schema/runtime validation | Metadata; locally authoritative body | W2 | [Invalid example L24–46](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/documentation/types/manifest-document.md#L24-L46), [schema L63–75](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/doc-metadata-manifest.schema.json#L63-L75) |
+| `.github/tools/doc-metadata/documentation/types/metadata-settings.md` | Metadata settings reference | Current product | Workflows | Match | None | Metadata; locally authoritative body | None | [Document L20–40](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/documentation/types/metadata-settings.md#L20-L40) |
+| `.github/tools/doc-metadata/documentation/types/pattern-entry.md` | Include-pattern reference | Current product | Workflows | Match | None | Metadata; locally authoritative body | None | [Document L20–46](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/documentation/types/pattern-entry.md#L20-L46) |
+| `.github/tools/doc-metadata/documentation/types/report-analysis.md` | Machine-report reference | Current product; incomplete | Workflows | Partial | Lists four modes but omits implemented `ContentChanges` and its report content | Metadata; locally authoritative body | W2 | [Mode list L24–36](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/documentation/types/report-analysis.md#L24-L36), [parameter L3–6](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/doc-metadata/update-doc-metadata.ps1#L3-L6), [runtime L3840–3855](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/scripts/doc-metadata/update-doc-metadata.ps1#L3840-L3855) |
+| `.github/tools/doc-metadata/documentation/update-doc-metadata.md` | Main doc-metadata operations guide | Current product; current/planned overlap | Workflows | Match | Current output is accurately described, but central-authority limitations and W7/W15/W16 future states need clearer separation | Metadata; locally authoritative body | W2 labeling; W7, W15 and W16 update with behavior | [Current format L43–50](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/documentation/update-doc-metadata.md#L43-L50), [future label L145–162](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/.github/tools/doc-metadata/documentation/update-doc-metadata.md#L145-L162) |
+| `AGENTS.md` | Repository-wide agent authority | Current normative; shared baseline plus local overlay | Workflows owns repository specifics; canonical shared-baseline owner **Unverified** | Partial | Actual roots are recorded, but validation/framework/convention fields remain placeholders; generic defaults can conflict if local specifics are overlooked | Metadata; locally diverged from template | W2, repository-specific section only | [Authority L31–39](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/AGENTS.md#L31-L39), [actual structure and placeholders L401–424](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/AGENTS.md#L401-L424) |
+| `AGENT_GUARDRAILS.md` | Routed cross-repository guardrails | Current normative; copied generic | Shared owner **Unverified**; Workflows owns local overlay | Partial | `Version: x`; claims template-derived provenance without repository proof; assumes generic `src`/`test` instruction surfaces; empty overlay | Exact template copy; metadata present | W2 overlay; Maintainer decision required for shared baseline | [L22–36](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/AGENT_GUARDRAILS.md#L22-L36), [empty overlay L186–189](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/AGENT_GUARDRAILS.md#L186-L189) |
+| `DOCUMENTATION.md` | Repository documentation rules | Current normative; copied generic; stale/contradictory | Shared owner **Unverified**; Workflows owns local overlay | Mismatch | Unconditionally requires Markdown under `/docs`; large C#/XML contract is inapplicable to the current Python/PowerShell/YAML repository; overlay is empty | Exact template copy; metadata present | W2 overlay; Maintainer decision required for shared baseline | [Authority and `/docs` L23–35](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/DOCUMENTATION.md#L23-L35), [C#/XML L98–155](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/DOCUMENTATION.md#L98-L155) |
+| `README.md` | Repository and public workflow overview | Current product; incomplete | Workflows | Partial | Omits `doc-metadata.yml`; does not expose broken orchestrator status; leaves CI/lint/release interfaces undocumented; does not link detailed tool docs; sync path conflicts with recorded caller wrapper | Metadata; locally authoritative body | W2; later behavior passes update their own contracts | [Workflow table L24–40](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/README.md#L24-L40), [sync path L42–54](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/README.md#L42-L54) |
+| `repository-maintenance-orchestrator-recovery-backlog.md` | Binding ordered roadmap, approved architecture, current-state evidence | Current normative roadmap; historical evidence; planned behavior | Maintainer-controlled backlog | Not implementation-dependent | No internal current/planned defect found; its current-state claims were independently checked where possible | Human-authored; not doc-metadata governed | None | [Current findings L59–182](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/repository-maintenance-orchestrator-recovery-backlog.md#L59-L182), [W1/W2 L501–551](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/repository-maintenance-orchestrator-recovery-backlog.md#L501-L551) |
+| `repository-review-protocol.md` | Review and maintainer-control protocol | Current normative review policy; planned conventions | Maintainer/reusable review authority | Not implementation-dependent | No material contradiction found | Human-authored; not doc-metadata governed | None | [Protocol](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/repository-review-protocol.md) |
+| `src/AGENTS.md` | Nested instruction for `src/` | Copied generic; repository-inapplicable | Shared owner **Unverified**; Workflows owns local overlay | Mismatch | Assumes .NET/Visual Studio source and `/test` projects; `src/` has no source files; overlay empty | Exact template copy; metadata present | W2 overlay quarantine; Maintainer decision required for shared baseline | [Scope L22–30](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/src/AGENTS.md#L22-L30), [test convention and overlay L137–158](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/src/AGENTS.md#L137-L158) |
+| `test/AGENTS.md` | Nested instruction for `test/` | Copied generic; repository-inapplicable | Shared owner **Unverified**; Workflows owns local overlay | Mismatch | Describes test projects under `/test`; actual tests are `.github/scripts/**/tests`; `test/` contains only this file | Exact template copy; metadata present | W2 overlay quarantine; Maintainer decision required for shared baseline | [Scope L22–27](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/test/AGENTS.md#L22-L27), [organization and overlay L145–176](https://github.com/BionicCode/workflows/blob/3a3fe364028db003bfc89d3a94fd8a9f167d1f35/test/AGENTS.md#L145-L176) |
+
+## 5. Cross-document contradictions
+
+1. **Instruction authority versus actual repository layout**
+
+   `AGENTS.md:401–405` correctly identifies `.github/workflows/`, `.github/scripts/`, tool-local tests, and root/tool documentation. Its remaining placeholders and the copied Copilot, .NET, source, test, guardrail, and documentation files instead imply a Visual Studio solution with `src/`, `test/`, and `docs/`. Affected:
+
+   - `AGENTS.md`
+   - `.github/copilot-instructions.md`
+   - `.github/instructions/dotnet.instructions.md`
+   - `.github/instructions/test.instructions.md`
+   - `AGENT_GUARDRAILS.md`
+   - `DOCUMENTATION.md`
+   - `src/AGENTS.md`
+   - `test/AGENTS.md`
+
+2. **Path-specific Copilot instruction format**
+
+   GitHub requires an `.instructions.md` file to have starting frontmatter containing `applyTo`. The dotnet file’s starting frontmatter has no `applyTo`; the test file places `applyTo` after metadata and document content. They therefore do not conform to the documented path-specific format, and activation cannot be relied upon. [GitHub path-specific instruction requirements](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions#creating-path-specific-custom-instructions)
+
+3. **Documentation location**
+
+   `DOCUMENTATION.md:34` mandates `/docs`, while `AGENTS.md:401–405`, the tracked tree, initializer logic, and README establish root and tool-owned documentation directories. The `/docs/` link is additionally misleading as rendered and has no tracked Markdown target.
+
+4. **Sync configuration location**
+
+   `README.md`, `sync-manifest.md`, and `init_manifest.py:17–20` consistently implement `.github/sync-config`. The approved backlog records a current caller wrapper reading `.github/tools/sync-config/sync-manifest.json`. Workflows’ current implementation and docs agree with each other; the cross-repository contract does not. W6 owns the canonical path decision.
+
+5. **Required doc-metadata fields and example validity**
+
+   `doc-metadata-manifest-api.md:45–46` marks `versioningMode` and `timestampFormat` optional, and `types/manifest-document.md:24–46` omits both. The schema requires both, and runtime validation repeats that requirement. The full manifest guide and current manifest include them. This is a confirmed W2 correction.
+
+6. **Doc-metadata report modes**
+
+   `types/report-analysis.md:28` lists only `Analyze`, `Bootstrap`, `Update`, and `Check`; the script also implements `ContentChanges`.
+
+7. **Current versus planned eligibility governance**
+
+   The schema, manifest, and eligibility docs correctly describe current `documentEligibility`. W14 explicitly plans to remove it and broad `**/*.txt` governance. W2 must label the distinction; W2 must not remove current documentation ahead of W14.
+
+8. **Current versus planned history-link format**
+
+   Current code and `update-doc-metadata.md` emit `Changes:` with `View Commit`; the guide explicitly identifies `View Changes` as future. W15 plans quote-style links and removal of the `Changes:` label. This is a planned transition, not a baseline implementation mismatch.
+
+9. **Callable workflow versus central executable authority**
+
+   `.github/workflows/doc-metadata.yml` declares `workflow_call`, but its trusted checkout executes `../trusted/.github/scripts/doc-metadata/update-doc-metadata.ps1`, which remains caller-local in a cross-repository call. The backlog correctly reserves central authority for W7. README currently omits this workflow and its limitation.
+
+10. **Broken same-repository workflow call**
+
+    `.github/workflows/repository-maintenance.yml:172` calls absent `./.github/workflows/sync-managed-files.yml`. GitHub specifies that this syntax resolves a reusable workflow from the same commit as the caller, so the absent file is a concrete defect, not a dynamic-ref ambiguity. [GitHub `jobs.<job_id>.uses` syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_iduses)
+
+11. **Current filenames versus approved future role names**
+
+    README and workflows use current filenames. Backlog section 4.9 defines planned `-orchestrator`, `-caller`, and `-reusable` names. Because reusable workflow paths are literal public contracts, W2 should label current names but leave migration decisions to W2A/W2B.
+
+## 6. Authority and copy/generated map
+
+| Category | Authoritative source | Copy/consumer relationship |
+|---|---|---|
+| Repository-specific agent authority | `AGENTS.md`, especially `REPOSITORY SPECIFICS` | `.github/copilot-instructions.md` explicitly defers to it |
+| Protected generic instruction baselines | Canonical upstream owner **Unverified** | Seven exact template copies contain locally owned repository-specific overlay markers |
+| Sync product authority | Workflows sync workflow, schema, Python implementation, tests, and 12-file documentation tree | `init_manifest.py:64–74,137–140` copies the documentation tree byte-for-byte into caller `.github/sync-config/documentation/` |
+| Doc-metadata product authority | Workflows workflow, PowerShell engine, schema, manifest, tests, and eight-file documentation tree | Documentation is local and already diverges from the template; it is not installed by the current sync initializer |
+| Generated presentation authority | `.github/tools/doc-metadata/doc-metadata-manifest.json` and the PowerShell engine | 28 Markdown files have generated metadata/presentation; their bodies remain human-authored |
+| Product overview | `README.md` | No generated or caller-specific body copy identified |
+| Roadmap/current-state evidence | Recovery backlog | Maintainer-controlled; combines approved architecture, current findings, historical evidence, and planned passes |
+| Review policy | Review protocol | Maintainer/reusable review authority |
+| Caller-specific policy | Caller repositories | No caller-specific Markdown authority is tracked in Workflows; callers own their manifests, wrapper, permissions, and repository-specific examples |
+
+At the Workflows baseline, these seven files have blob-identical copies in [`BionicCode/template-visual-studio-repository@dd569d7`](https://github.com/BionicCode/template-visual-studio-repository/commit/dd569d77b46e0198185958cda865118b8508b7d6):
+
+| Path | Shared blob SHA |
+|---|---|
+| `.github/copilot-instructions.md` | `4d0f209a…` |
+| `.github/instructions/dotnet.instructions.md` | `f9a9763c…` |
+| `.github/instructions/test.instructions.md` | `02c70e81…` |
+| `AGENT_GUARDRAILS.md` | `ced33152…` |
+| `DOCUMENTATION.md` | `8e8fd7ff…` |
+| `src/AGENTS.md` | `b1c3a1c0…` |
+| `test/AGENTS.md` | `3a31be63…` |
+
+They predate their import into Workflows in commit [`38ddb8b`](https://github.com/BionicCode/workflows/commit/38ddb8b). This proves copy origin and byte identity, but does not by itself establish the template repository as canonical owner. Each file’s repository-specific marker does establish Workflows authority over its local overlay.
+
+Root `AGENTS.md` is not an exact template copy and contains Workflows-specific authority and control-plane rules.
+
+## 7. Missing, orphaned, or misleading documentation
+
+- README does not list `doc-metadata.yml`, document its current cross-repository authority limitation, or link its detailed documentation.
+- README does not link either detailed documentation tree, leaving the sync and doc-metadata API/type references orphaned from the repository overview.
+- CI, release, and lint public inputs, outputs, permissions, and examples are primarily discoverable only by reading YAML.
+- The broken local `repository-maintenance.yml` is documented only as a backlog defect. It must not be inferred to be a supported reusable workflow.
+- The doc-metadata manifest type example appears copyable but is invalid against the current schema/runtime.
+- The report reference omits an implemented public script mode.
+- `DOCUMENTATION.md` presents `/docs` as mandatory even though no tracked Markdown exists there.
+- The copied .NET/source/test instructions appear repository-applicable without evidence of .NET projects or tests in those locations.
+- Current eligibility and history-link documentation needs clearer “current” labeling beside approved W14/W15 future behavior.
+- The backlog and review protocol are outside doc-metadata governance. Whether that is intentional is **Unverified** and is a governance risk rather than a confirmed defect.
+- Apart from `/docs/`, no missing repository-local Markdown target was found.
+
+## 8. Proposed W2 file allowlist
+
+Proposed count: **16 exact Markdown paths**.
+
+For `AGENTS.md`, edits must remain inside `REPOSITORY SPECIFICS`. For the seven exact template copies, W2 may edit only their designated repository-specific overlays. W2 must not alter shared baseline prose, relocate/add Copilot frontmatter, decide upstream ownership, or edit the backlog/protocol.
+
+| Exact path | Current problem and minimum W2 correction | Authority/relationship | Why W2; later-pass risk |
+|---|---|---|---|
+| `.github/copilot-instructions.md` | Overlay asserts placeholder solution, `src`, `test`, and `docs` structure. Replace only the local overlay with the actual Workflows roots and an explicit root-`AGENTS.md` authority pointer. | Exact copied baseline; Workflows-owned overlay | Prevents stale implementation guidance. Shared-baseline synchronization remains a maintainer decision. |
+| `.github/instructions/dotnet.instructions.md` | No current .NET scope; file is not validly path-scoped. Overlay must state that it is dormant/inapplicable and must not cause creation of .NET/source/test structure. | Exact copied baseline; Workflows-owned overlay | W2 quarantine only. Do not add/move `applyTo`; shared/frontmatter repair requires a maintainer authority decision. |
+| `.github/instructions/test.instructions.md` | Malformed path-specific frontmatter and nonexistent `/test` implementation scope. Overlay must identify actual tool-local tests and quarantine this generic file. | Exact copied baseline; Workflows-owned overlay | W2 quarantine only. Do not activate or restructure it. |
+| `.github/scripts/sync-files-from-manifest/documentation/sync-manifest.md` | `.github/sync-config` is accurate for the initializer but conflicts with the recorded caller wrapper. Label both as current conflicting state and defer the canonical choice. | Workflows-authoritative; copied outward | W2 stabilizes current/planned interpretation; W6 makes and implements the path decision. |
+| `.github/tools/doc-metadata/documentation/doc-metadata-manifest-api.md` | Correct `versioningMode` and `timestampFormat` to required in `defaults.metadata`; label `documentEligibility` as current with W14 removal planned. | Workflows-authoritative | Confirmed current documentation defect; W14 later updates behavior and docs together. |
+| `.github/tools/doc-metadata/documentation/doc-metadata-manifest.md` | Clearly label current manifest governance and approved W14 removal; do not remove current fields. | Workflows-authoritative | Prevents current/planned confusion; W14 owns behavior change. |
+| `.github/tools/doc-metadata/documentation/types/document-eligibility.md` | Add prominent current-state and planned-W14-removal labeling. | Workflows-authoritative | W2 quarantine/stabilization; W14 removes the behavior and then updates/removes this reference. |
+| `.github/tools/doc-metadata/documentation/types/manifest-document.md` | Add required `versioningMode` and `timestampFormat` to the copyable example. | Workflows-authoritative | Confirmed baseline defect; no product choice required. W14 may later change the broader example. |
+| `.github/tools/doc-metadata/documentation/types/report-analysis.md` | Add implemented `ContentChanges` mode and its report fields/semantics. | Workflows-authoritative | Confirmed current omission. W7 must update any later workflow-contract changes. |
+| `.github/tools/doc-metadata/documentation/update-doc-metadata.md` | Add a current limitation callout: cross-repository `workflow_call` is not yet a Workflows-owned executable engine; preserve current link format while labeling W15. | Workflows-authoritative | W2 prevents false authority assumptions. W7, W15, and W16 own later behavior changes. |
+| `AGENTS.md` | Actual roots are present, but validation/framework/convention fields remain placeholders. Replace placeholders with verified values or explicit `N/A`/`Unverified`; explicitly override generic `.NET`, `/test`, and `/docs` defaults. | Local normative authority; protected | W2 stabilizes agent guidance. W2A/W2B/W3 may later change workflow names/structure and must update it if affected. |
+| `AGENT_GUARDRAILS.md` | Overlay is empty while shared text claims template-derived provenance and generic `src`/`test` routing. Add a local applicability/provenance qualification and actual repository surfaces. | Exact copied baseline; Workflows-owned overlay | W2 prevents generic assumptions; shared baseline remains outside scope. |
+| `DOCUMENTATION.md` | `/docs` mandate and C#/XML-specific expectations conflict with current repository practice. Overlay must establish root/tool documentation and Python/PowerShell/YAML applicability. | Exact copied baseline; Workflows-owned overlay | W2 resolves current instruction conflict without editing shared prose. |
+| `README.md` | Add `doc-metadata.yml` with its current limitation; state that the local orchestrator is not a supported usable workflow; link both documentation trees; summarize or link current public contracts; distinguish current and planned names/paths. | Workflows-authoritative | W2 owns current-state clarity. W2A/W2B, W3, W6, and W7 update it with later behavior. |
+| `src/AGENTS.md` | Empty subtree is described as .NET source. Overlay must state that no current implementation lives under `src/` and that agents must not create a .NET layout from this generic copy. | Exact copied baseline; Workflows-owned overlay | W2 quarantine; shared baseline changes need maintainer authority. |
+| `test/AGENTS.md` | Empty subtree is described as the repository test root. Overlay must point to `.github/scripts/**/tests` and prohibit inferring a new test-project layout. | Exact copied baseline; Workflows-owned overlay | W2 quarantine; shared baseline changes need maintainer authority. |
+
+No other Markdown path is justified for W2. In particular, the recovery backlog and review protocol should remain outside the allowlist.
+
+## 9. Findings and uncertainty
+
+### Confirmed contradictions
+
+- `DOCUMENTATION.md:34` conflicts with the tracked root/tool documentation layout.
+- `.github/instructions/dotnet.instructions.md` and `test.instructions.md` do not conform to GitHub’s documented `applyTo` frontmatter format.
+- Seven generic instruction surfaces are exact imported copies; their shared canonical owner remains unresolved, while their local overlays are explicitly Workflows-owned.
+- `doc-metadata-manifest-api.md:45–46` contradicts schema and runtime requirements.
+- `types/manifest-document.md:24–46` is not valid under the current schema/runtime.
+- `types/report-analysis.md:28` omits current `ContentChanges`.
+- README omits the current doc-metadata workflow.
+- `.github/workflows/repository-maintenance.yml:172` references an absent same-commit workflow.
+- `.github/sync-config` is the current initializer path, while the approved backlog records `.github/tools/sync-config` in the caller wrapper.
+- The current doc-metadata workflow remains caller-engine-dependent in cross-repository execution, as recorded by the backlog.
+
+### Likely risks
+
+- Humans or agents may follow copied .NET/source/test guidance despite its lack of repository applicability.
+- The seven copied instruction baselines may drift independently because their canonical shared owner and synchronization process are unresolved.
+- The backlog and review protocol can drift without doc-metadata governance.
+- Detailed product docs can drift unnoticed because README does not link them.
+- CI/lint/release contract changes may remain undocumented outside YAML.
+- Additional downstream caller references may exist beyond the caller mismatch recorded in the backlog.
+
+### Unresolved uncertainty
+
+- **Unverified:** canonical upstream owner of the seven exact shared instruction copies.
+- **Unverified:** whether Workflows was formally derived from `template-visual-studio-repository`; identical files prove copying, not repository provenance.
+- **Unverified:** actual GitHub Copilot ingestion behavior for the malformed `.instructions.md` files; only format nonconformance is confirmed.
+- **Unverified:** fresh PowerShell execution behavior and acceptance-suite status because `pwsh` was unavailable.
+- **Unverified:** fresh sync-test results because the attempted test import failed on missing `jsonschema`.
+- **Unverified:** exhaustive live state of all downstream caller wrappers and documentation.
+- **Unverified:** GitHub Actions semantic validation beyond static workflow inspection.
+
+## 10. Stop-condition and state-change check
+
+- `main` HEAD changed during review: **No**
+- W1 branch HEAD changed during review: **No**
+- Final `main`: `3a3fe364028db003bfc89d3a94fd8a9f167d1f35`
+- Final W1 branch: `af639f43688bfd136b1dbdf051cc07bb7c588068`
+- Leased working tree changed: **No leased mutable worktree existed**
+- Repository file changed: **No**
+- Repository report file created: **No**
+- Git write action: **No**
+- GitHub write action: **No**
+- Branch, commit, PR, issue, workflow-run, setting, or status mutation: **No**
+- Stop condition occurred: **No**
+
+Temporary bare-clone, archive, and link-analysis files existed only under `/tmp` and did not alter the repository or GitHub state.
+
+## 11. Maintainer handoff
+
+If the maintainer accepts this audit, the exact recordable W1 result is:
+
+> W1 — documentation authority/current-state audit: 30/30 tracked Markdown files audited at baseline `3a3fe364028db003bfc89d3a94fd8a9f167d1f35`; verdict `Acceptable for W2 scoping`; exact 16-path W2 allowlist documented; review-only with no repository or GitHub changes.
+
+Proposed evidence-ledger information:
+
+| Ledger field | Proposed value |
+|---|---|
+| Pass | `W1` |
+| Review date | `2026-07-14` |
+| Pre-pass baseline | `3a3fe364028db003bfc89d3a94fd8a9f167d1f35` |
+| Audit result | `Acceptable for W2 scoping` |
+| Coverage | `30/30 tracked Markdown; 0 excluded` |
+| W2 scope | `16 exact Markdown paths; copied instruction files restricted to repository-specific overlays` |
+| Result SHA | `N/A — review-only inline report` |
+| W1 branch bookkeeping SHA | `af639f43688bfd136b1dbdf051cc07bb7c588068`; do not record as the audit-result SHA |
+| Pull request | `N/A` |
+| Link/reference evidence | `20 local targets resolved; 3 anchors resolved; 1 misleading /docs target; 1 missing non-Markdown workflow target` |
+| Validation | Lease/merge-base/diff verification; full Markdown inventory; static workflow/script/schema/manifest/example/link audit; `git diff --check` passed |
+| Not executed | PowerShell acceptance suite; GitHub Actions semantic run; Python sync tests ran zero tests because `jsonschema` import failed |
+| Repository/GitHub changes | `None` |
+| Decision owner | Maintainer |
+| Next potentially unlocked pass | `W2 — Stabilize current-state documentation before Codex implementation` |
+
+This audit supplies enough evidence and an exact allowlist for W2 to be scoped if the maintainer accepts W1. It does not itself accept W1 or unlock W2.
