@@ -15,6 +15,7 @@ The final program goal is to make Workflows the single implementation authority 
 - The full W1 audit result was returned in chat and is not persisted in the repository or PR #8. Only the W1 execution-handoff PDF survives outside the repository.
 - The existing W2 remote branch predates the finalized W2 activation/lease sequence and cannot prove branch creation from the current activation commit.
 - The current recommendation is to migrate now, but make Claude's first assignment a read-only pre-W2 evidence reconstruction and backlog-integrity review. This is a recommendation, not an instruction that overrides Claude's independent assessment or the maintainer's decision.
+- Engineering Evidence Archive use is deliberately deferred until an accepted Phase 3 outcome and an explicit maintainer green light. Once validly activated, archive use is expected for in-scope durable evidence under the current task; it never becomes a second roadmap, execution lease, or acceptance authority. See `09-engineering-evidence-archive-activation.md`.
 
 ## Authority boundary
 
@@ -70,6 +71,8 @@ Read `07-evidence-and-source-map.md` before repeating a historical claim or trea
 
 Use `08-first-claude-task.md` as the proposed first read-only assignment.
 
+Read `09-engineering-evidence-archive-activation.md` before deciding whether evidence may or must be persisted in the Engineering Evidence Archive. It defines the deferred status, future activation gate, package mapping, operational sequence, write boundaries, and degraded path.
+
 ## First-session behavior
 
 1. Resolve the actual repository root; do not work from the old ChatGPT project mirror.
@@ -79,3 +82,4 @@ Use `08-first-claude-task.md` as the proposed first read-only assignment.
 5. Do not execute W2 merely because the ledger says `Pending`.
 6. Keep verified facts, assessments, recommendations, and unknowns separate.
 7. Return contradictions for maintainer decision before changing protected state.
+8. Treat archive use as deferred unless the Phase 3 acceptance and explicit green-light gates in `09-engineering-evidence-archive-activation.md` are freshly satisfied.

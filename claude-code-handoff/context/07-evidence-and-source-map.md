@@ -85,6 +85,32 @@ test/AGENTS.md
 
 Important applicability fact: `src/` and `test/` contain only their AGENTS files in the assessed checkout. Generic .NET instructions should not be presumed relevant to a Python/PowerShell/GitHub Actions repository.
 
+### Deferred Engineering Evidence Archive routing
+
+`09-engineering-evidence-archive-activation.md` is the Workflows-side procedure for future archive use. It does not activate the archive. After activation, the archive's current `CLAUDE.md`, `AGENTS.md`, `EVIDENCE_TRACKING.md`, `TOOLING.md`, `requirements.txt`, versioned schemas, tests, project metadata, and existing package records must be read from a freshly resolved archive checkout. A missing instruction import or material conflict is a stop condition; never invent the missing content.
+
+Read-only revalidation on 2026-08-04 observed:
+
+```text
+Archive repository: BionicCode/engineering-evidence-archive
+Last-known local path: I:\GitHubRepositories\ChatGPT\EngineeringEvidenceArchive\engineering-evidence-archive
+Branch: main
+HEAD: e6d98ebc799d3b67e94f0edc531de3746badc6d3
+Cached upstream: origin/main at 3125e561b8d42cb746eb4313ffbcf2cb21e55e2c
+Divergence: five commits ahead, zero behind
+Working tree: clean
+```
+
+This is dated evidence, not an activation lease. Phase 3 remains incomplete;
+`projects/workflows` and W1 remain legacy pre-contract state. Archive
+`CLAUDE.md` still imports the absent
+`docs/claude-context/00-core-context.md`, and root `AGENTS.md` still refers to
+removed `projects/template-visual-studio-repository` content in its migration
+boundary. The current host has Python 3.14.6 but not the pinned `PyYAML`
+dependency; read-only repository validation therefore returned exit `2`,
+`DEPENDENCY_UNAVAILABLE`, without changing archive state. Re-resolve all of
+these conditions after Phase 3 rather than treating them as permanent claims.
+
 ## 3. Current implementation anchors
 
 ### Workflows
@@ -226,11 +252,21 @@ At W1 baseline `3a3fe36...`:
 30 tracked Markdown files
 ```
 
-At cached current `dfe10c1...`:
+At the preserved 2026-08-03 cached snapshot `dfe10c1...`:
 
 ```text
 32 tracked Markdown files
 ```
+
+At the revalidated pre-change HEAD `8a2cf838...` on 2026-08-04:
+
+```text
+43 tracked Markdown files
+```
+
+This handoff update adds `09-engineering-evidence-archive-activation.md` to the
+working tree. Recount at the exact reviewed result rather than treating either
+historical count as a future invariant.
 
 Added after W1:
 
@@ -257,15 +293,16 @@ The PR was inspected read-only and did not expose the missing W1 audit.
 ## 10. Verification limitations
 
 - No fresh `git fetch` or `pull` was performed.
-- A direct `git ls-remote` attempt could not connect to GitHub.
-- Cached refs were last updated locally on 2026-08-02.
-- No build, parser, test, linter, formatter, or workflow was run for this migration documentation task.
+- The 2026-08-03 direct `git ls-remote` attempt could not connect to GitHub; live remote state remains unknown.
+- Local and cached refs were re-resolved on 2026-08-04 but remain cached evidence.
+- No Workflows build, executable test suite, formatter, or workflow was run; this focused handoff update uses documentation, link, SHA, and diff checks only.
 - No template-caller checkout was revalidated in the current migration task.
 - No live Actions settings, branch protection, credentials, or private-source fixtures were inspected.
 - The full W1 result is unknown.
 - The exact earlier GPT session that generated each backlog sentence is not mechanically recoverable from Git.
 - A bounded path scan cannot establish semantic backlog integrity.
 - The Codex memory registry contained no Workflows-specific entry; this pack relies on repository evidence, supplied project artifacts, current conversation context, and the maintainer's correction.
+- The 2026-08-04 archive validator attempt could not proceed beyond its dependency bootstrap because the pinned runtime dependencies are not installed on this host; the archive test suite was not run.
 
 ## 11. Claims that remain assessments
 
@@ -275,9 +312,11 @@ These should be independently reviewed:
 - a read-only pre-W2 audit is the best Claude onboarding task;
 - W1 should remain closed while its evidence is reconstructed;
 - a fresh W2 branch is safer than reusing the existing branch;
-- Engineering Evidence Archive integration can be postponed;
+- the exact future Engineering Evidence Archive activation prerequisites have been satisfied when the maintainer gives the green light;
 - the backlog's obvious missing-path blast radius may be limited to the known nine;
 - strategy-review recommendations remain useful despite its W2 miss.
+
+The current archive deferral is explicit maintainer direction, not one of these assessments. The future readiness facts must still be verified at activation time.
 
 ## 12. Revalidation checklist for Claude
 
@@ -288,4 +327,4 @@ Before repeating a handoff claim:
 3. verify the cited commit exists and inspect its diff;
 4. inspect the current file rather than relying on this summary;
 5. classify the claim as current, historical, planned, user-confirmed, inferred, or unknown;
-6. report any drift from this 2026-08-03 snapshot.
+6. report any drift from the latest dated snapshot in this file.

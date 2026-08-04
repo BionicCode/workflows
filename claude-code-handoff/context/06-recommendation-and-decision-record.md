@@ -155,7 +155,7 @@ All should be true or explicitly waived by the maintainer:
 
 ## 6. Engineering Evidence Archive recommendation
 
-Do not block the Claude migration or backlog repair on Engineering Evidence Archive integration.
+Do not block the Claude migration or backlog repair on Engineering Evidence Archive integration. Archive use is deliberately deferred until its Phase 3 migration has an accepted outcome and the maintainer explicitly green-lights use.
 
 For now, preserve reliability through:
 
@@ -166,7 +166,9 @@ For now, preserve reliability through:
 - recorded limitations;
 - maintainer acceptance.
 
-After the reconstruction and correction are accepted, store their final handoff/review artifacts in the archive if that program is ready. The archive should preserve evidence; it should not become a second roadmap authority.
+Until activation, preserve an archive-ready durable report and an exact pending-ingestion record; do not claim that either was archived. After the Phase 3 and green-light gates are freshly satisfied, use the archive as the expected destination for qualifying in-scope evidence under the current task. Follow `09-engineering-evidence-archive-activation.md` so a one-sentence green light plus a task with exact archive scope is operationally sufficient.
+
+The archive preserves evidence; it does not become a second roadmap, execution lease, implementation, review, maintainer-acceptance, or integration authority. The green light activates availability and expectation, not blanket mutation: the current task must still identify the source scope, package, artifacts, and permitted archive writes.
 
 ## 7. Conditions that could change the recommendation
 

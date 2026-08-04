@@ -24,7 +24,7 @@ Do not modify:
 - branches, refs, commits, tags, stashes, or remotes;
 - pull requests, issues, reviews, workflow runs, or repository settings;
 - backlog statuses, checkboxes, or evidence cells;
-- the existing untracked `CLAUDE.md` or this context package.
+- the tracked `CLAUDE.md` or this context package.
 
 Do not install dependencies into the repository or run state-changing validation.
 
@@ -40,16 +40,26 @@ Do not use `template-visual-studio-repository` as the active implementation repo
 
 ## Dated state hints, not leases
 
-The prior assessment observed:
+The latest read-only assessment on 2026-08-04 observed the attached task worktree:
 
 ```text
-local main: a0743587783b1c16a35b8e3f47d194f942ff3997
-cached origin/main: dfe10c1724ee90120e1b9692bcd8accff50f0042
-untracked: CLAUDE.md containing @AGENTS.md
+checkout: detached linked worktree
+HEAD: 8a2cf838d2511192022acf2eee3d5ba7d7c229f3
+local main: 8a2cf838d2511192022acf2eee3d5ba7d7c229f3
+local main upstream: origin/main
+cached origin/main: 8a2cf838d2511192022acf2eee3d5ba7d7c229f3
+working tree: clean
+tracked at the resolved baseline: CLAUDE.md and context files 00 through 08
 nominal backlog state: W0/W1 Completed, W2 Pending, later passes Locked
 ```
 
 Re-resolve all state yourself. These values do not authorize checkout, pull, fetch, branch creation, or W2 work.
+
+The older `a074358...` local-main, `dfe10c1...` cached-upstream, and untracked-`CLAUDE.md` observations are preserved as historical evidence in `03-current-state-and-integrity-blockers.md`; they are not current hints.
+
+## Engineering Evidence Archive boundary
+
+Engineering Evidence Archive use is deferred for this proposed task. Do not create, populate, checksum, validate as complete, or otherwise mutate an archive package. Read `09-engineering-evidence-archive-activation.md` for the future gate and procedure. If this review produces evidence worth retaining, return an archive-ready durable report and an exact pending-ingestion record; do not claim that either was archived.
 
 ## Required sources
 
@@ -224,7 +234,8 @@ Return a self-contained Markdown report with:
 11. recommended next sequence and decision gates;
 12. exact protected changes that would require later authorization;
 13. unresolved maintainer questions;
-14. confirmation that no file/Git/GitHub state changed.
+14. confirmation that no file/Git/GitHub state changed;
+15. archive status (`not archived`) and, when useful, the exact pending-ingestion record required by `09-engineering-evidence-archive-activation.md`.
 
 Clearly separate:
 
@@ -257,6 +268,7 @@ This first task ends with analysis and a recommendation. It must not:
 - create a new pass;
 - create or reset a branch;
 - implement documentation changes;
-- commit the Claude context pack.
+- commit the Claude context pack;
+- initialize, populate, checksum, or otherwise mutate an Engineering Evidence Archive package.
 
 The maintainer will separately decide and authorize any remediation.

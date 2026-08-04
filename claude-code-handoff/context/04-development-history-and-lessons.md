@@ -12,7 +12,7 @@ The ChatGPT project that carried this work was named approximately `template-vis
 
 The user wanted to move from a cloud/project mirror to a local-folder project so the actual repository/worktree could be provided to Work and Codex. The desktop product did not support moving existing chats between projects, so detailed Markdown handoffs became necessary.
 
-Work then paused before W2 while a separate Engineering Evidence Archive was introduced as a possible durable home for handoffs and review evidence. The current migration to Claude Code does not need to wait for that archive. Accepted artifacts can be archived later.
+Work then paused before W2 while a separate Engineering Evidence Archive was introduced as a durable home for authorized handoffs, execution reports, reviews, and material supporting evidence. Archive use remains deliberately deferred until its Phase 3 migration is accepted and the maintainer explicitly green-lights use. The Claude migration and Workflows backlog repair do not wait for that gate. After valid activation, archive persistence is expected for in-scope durable evidence under the current task, using `09-engineering-evidence-archive-activation.md`; it is not a second backlog or acceptance authority.
 
 ## 3. Repository development before the recovery roadmap
 
@@ -233,11 +233,14 @@ Lesson: duplicated state is hazardous even when one copy is labelled non-authori
 
 The project stopped before real W2 implementation. The user explored an Engineering Evidence Archive so future handoffs, review reports, and accepted evidence would survive project/chat migration.
 
-That work was motivated directly by the missing W1 result and the broader goal of evidence-led development. It is useful but not a prerequisite for repairing the Workflows backlog. The current recommendation is to postpone archive integration, use a SHA-pinned Claude handoff now, and archive accepted results later.
+That work was motivated directly by the missing W1 result and the broader goal of evidence-led development. It is not a prerequisite for repairing the Workflows backlog. The current decision is to keep archive integration deferred, use a SHA-pinned Claude handoff now, and retain archive-ready reports plus exact pending-ingestion records until Phase 3 is accepted and the maintainer gives the explicit green light.
+
+Deferral does not make later use vague or optional. After a valid activation, Claude should follow `09-engineering-evidence-archive-activation.md` and persist qualifying durable evidence when the current task authorizes the exact package and artifacts. The activation does not authorize Workflows edits, Git/GitHub actions, unrelated archive packages, technical acceptance, maintainer acceptance, or source integration.
 
 ## 13. 2026-08-02/03 migration assessment
 
-The migration assessment re-resolved the local Workflows checkout and found:
+The historical 2026-08-02/03 migration assessment re-resolved the local
+Workflows checkout and found the following at that time:
 
 - local `main` at `a074358...`;
 - cached `origin/main` at `dfe10c1...`;
@@ -248,6 +251,10 @@ The migration assessment re-resolved the local Workflows checkout and found:
 - the nine nonexistent allowlist paths;
 - no full W1 report in the repository or PR #8;
 - W2 branch reflog beginning at pre-normalization commit `82c19aa...`.
+
+These are preserved historical observations, not current checkout hints. The
+2026-08-04 pre-change checkout facts are recorded in
+`03-current-state-and-integrity-blockers.md`.
 
 The user explicitly reminded the agent that the allowlist was hallucinated. That correction changed the blocker analysis from "missing files" to "corrupted authoritative backlog."
 

@@ -2,52 +2,77 @@
 
 ## 1. Status of this document
 
-This is a dated assessment from 2026-08-03. It is deliberately loaded during migration because the repository's nominal W2 state is unsafe to interpret without this context.
+This assessment began on 2026-08-03 and its checkout facts were revalidated on 2026-08-04. It is deliberately loaded during migration because the repository's nominal W2 state is unsafe to interpret without this context.
 
 Re-resolve every Git, GitHub, branch, and working-tree fact before acting. Do not convert a stale snapshot into a new execution lease.
 
 ## 2. Assessed repository state
 
-### Local checkout
+### Pre-change attached checkout - verified 2026-08-04
+
+```text
+Path: I:\ChatGPT And Codex Worktrees\c00e\Workflows
+Repository: BionicCode/workflows
+Checkout: detached linked worktree
+HEAD: 8a2cf838d2511192022acf2eee3d5ba7d7c229f3
+Local main: 8a2cf838d2511192022acf2eee3d5ba7d7c229f3
+Local main upstream: origin/main
+Cached origin/main: 8a2cf838d2511192022acf2eee3d5ba7d7c229f3
+Detached-checkout upstream: none
+Working tree: clean
+```
+
+`git worktree list --porcelain` also resolved the linked primary worktree at
+`I:\GitHubRepositories\Workflows`, on local `main` at the same commit. That
+primary checkout's read-only status was also clean on `main` with upstream
+`origin/main`. The attached checkout is the task workspace and was clean before
+this focused documentation update.
+
+Root `CLAUDE.md` and context files `00` through `08` are tracked at the resolved
+HEAD. This focused update adds context file `09` in the working tree. The old
+condition in which root `CLAUDE.md` was an untracked one-line bridge no longer
+describes the resolved baseline or resulting documentation state.
+
+### Preserved 2026-08-03 snapshot - historical, not current
+
+The preceding assessment observed the primary checkout at:
 
 ```text
 Path: I:\GitHubRepositories\Workflows
-Repository: BionicCode/workflows
 Branch: main
 Local HEAD: a0743587783b1c16a35b8e3f47d194f942ff3997
-Upstream: origin/main
-```
-
-Last successful status snapshot:
-
-```text
+Cached origin/main: dfe10c1724ee90120e1b9692bcd8accff50f0042
 main was 0 commits ahead and 1 cached commit behind origin/main
 no tracked staged changes
 no tracked unstaged changes
 one untracked file: CLAUDE.md
 ```
 
-The untracked `CLAUDE.md` contained exactly:
+That historical untracked `CLAUDE.md` contained exactly:
 
 ```markdown
 @AGENTS.md
 ```
 
-That is a valid minimal Claude Code bridge, but its untracked status means it is not part of a reproducible repository baseline. Treat it as user-owned. Do not remove, overwrite, commit, or ignore it without an explicit decision.
+At that time it was a valid minimal Claude Code bridge but not part of a
+reproducible repository baseline. Preserve this observation as history; do not
+apply its untracked-file handling to the current tracked file.
 
 ### Cached remote-tracking state
 
 ```text
-origin/main: dfe10c1724ee90120e1b9692bcd8accff50f0042
-origin/docs/W2-Stabilize-current-state-documentation-before-Codex-implementation:
-  dfe10c1724ee90120e1b9692bcd8accff50f0042
-origin/docs/w1-documentation-authority-audit:
-  9abed50a87fafb80157cab636fd73de018f3c5ea
+origin/main: 8a2cf838d2511192022acf2eee3d5ba7d7c229f3
 ```
 
-The one cached commit after local `main` changes only `wwith` to `with` in the backlog's index/ledger synchronization note.
+The current commit is a merge whose second parent is the former cached
+`origin/main` tip `dfe10c1724ee90120e1b9692bcd8accff50f0042`.
+That earlier commit changed only `wwith` to `with` in the backlog's
+index/ledger synchronization note. Preserve `dfe10c1...` and `a074358...` as
+historical Git evidence, not as current checkout tips.
 
-No fetch was performed during the assessment. A read-only `git ls-remote` attempt could not connect to GitHub. These are cached refs, not a guarantee of current remote state.
+No fetch was performed during either assessment. The 2026-08-03 read-only
+`git ls-remote` attempt could not connect to GitHub. The 2026-08-04 value above
+is still a cached ref, not a guarantee of current live remote state.
 
 ## 3. Nominal pass state
 
@@ -141,7 +166,13 @@ Evidence: 30/30 tracked Markdown audited; 20 local targets and 3 anchors resolve
 Reviewer: BionicCode
 ```
 
-The W1 baseline contains exactly 30 tracked Markdown files. Current cached `origin/main` contains 32; `backlog-workflow-documentation.md` and `evidence-ledger-documentation.md` were added after W1.
+The W1 baseline contains exactly 30 tracked Markdown files. The preserved
+2026-08-03 cached `dfe10c1...` snapshot contained 32, with
+`backlog-workflow-documentation.md` and `evidence-ledger-documentation.md`
+added after W1. The revalidated pre-change `8a2cf838...` baseline contains 43;
+this focused update adds context file `09` in the working tree. Recount at the
+exact reviewed result rather than treating a dated count as a current
+allowlist.
 
 ### What is missing
 
@@ -247,7 +278,7 @@ That scan cannot detect semantic hallucinations. The deep review should verify:
 - every accepted historical SHA and its semantic role;
 - every claim imported from the independent review;
 - whether roadmap recommendations were accepted, rejected, or never decided;
-- whether the 32 current Markdown files have correct authority classification;
+- whether every Markdown file at the exact reviewed state has the correct authority classification;
 - whether any real W2-required document is omitted.
 
 ## 11. Current blockers before actual W2 execution
@@ -258,9 +289,11 @@ That scan cannot detect semantic hallucinations. The deep review should verify:
 4. The backlog requires a semantic audit for additional unsupported GPT content.
 5. The existing W2 branch does not satisfy current activation provenance.
 6. No execution-ready W2 handoff supplies a valid current lease.
-7. Local `main` is behind the cached upstream by one commit and the live remote could not be refreshed.
-8. The worktree contains an intentional but unresolved untracked `CLAUDE.md`.
-9. Protected backlog/ledger corrections require explicit maintainer authorization and independent review.
+7. Live remote state has not been refreshed; cached `origin/main` is not a live-remote guarantee.
+8. Protected backlog/ledger corrections require explicit maintainer authorization and independent review.
+
+The earlier local-behind and untracked-`CLAUDE.md` conditions are resolved in
+the 2026-08-04 attached checkout and are not current blockers.
 
 ## 12. Unresolved questions for Claude and the maintainer
 
@@ -270,9 +303,8 @@ That scan cannot detect semantic hallucinations. The deep review should verify:
 - Does W2 remain the right pass after the deep audit, or must it be revised/split?
 - What additional backlog statements were introduced by GPT without evidence?
 - Should the existing W2 branch be retained as historical evidence, abandoned without deletion, or explicitly superseded by a fresh branch?
-- Should root `CLAUDE.md` and any context pack become tracked project surfaces or remain local?
 - Which non-binding recommendations from the independent strategy review should be admitted into the roadmap?
-- When should accepted handoffs/reviews be persisted in the Engineering Evidence Archive?
+- Which accepted Engineering Evidence Archive Phase 3 outcome and explicit maintainer green light will satisfy the activation procedure in `09-engineering-evidence-archive-activation.md`?
 
 Do not answer these by convenience. Produce evidence and alternatives for maintainer decision.
 
