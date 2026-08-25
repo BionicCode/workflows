@@ -1,7 +1,7 @@
 ---
-Version: 1
+Version: 2
 Created: 2026-05-28T20:25:18+00:00
-Updated: 2026-05-28T20:25:18+00:00
+Updated: 2026-08-23T18:59:19+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -46,12 +46,12 @@ Using `@main` is acceptable during development and early testing. After release,
 Each caller repository owns its manifest at:
 
 ```text
-.github/sync-config/sync-manifest.json
+.github/tools/sync-config/sync-manifest.json
 ```
 
-The schema copied to caller repositories at `.github/sync-config/sync-manifest.schema.json` is for editor tooling, documentation, and human guidance. Authoritative validation always uses the schema bundled with the reusable workflow version being executed.
+The schema copied to caller repositories at `.github/tools/sync-config/sync-manifest.schema.json` is for editor tooling, documentation, and human guidance. Authoritative validation always uses the schema bundled with the reusable workflow version being executed.
 
-`VisualStudioGitHubTemplate` copied schema/docs/manifest content must be migrated separately after this contract change; this repository change does not modify that template repository.
+`VisualStudioGitHubTemplate` already consumes this location in its inherited caller wrapper. Generic initialization and callers must remain aligned on this path.
 
 ## Sync Files From Manifest
 
@@ -92,7 +92,7 @@ No workflow-call inputs changed for `target_directory` or `source_glob`; both ar
 
 ### Commands
 
-- `init` copies or updates `.github/sync-config/sync-manifest.schema.json`, copies documentation, creates `.github/sync-config/sync-manifest.json` only when missing, opens or updates one initialization PR, and stops without source fetch or sync.
+- `init` copies or updates `.github/tools/sync-config/sync-manifest.schema.json`, copies documentation, creates `.github/tools/sync-config/sync-manifest.json` only when missing, opens or updates one initialization PR, and stops without source fetch or sync.
 - `validate` validates `manifest_json` against the bundled JSON Schema and local semantic rules only. It does not enumerate remote trees, fetch sources, parse marker content, or write files.
 - `sync` validates first, writes the normalized manifest, expands remote globs during planning, and then verifies PRs or creates/updates one aggregated sync PR on branch events.
 
@@ -184,7 +184,7 @@ Example recursive documentation sync:
   "source_repo": "BionicCode/workflows",
   "source_ref": "main",
   "source_glob": ".github/scripts/sync-files-from-manifest/documentation/**/*.md",
-  "target_directory": ".github/sync-config/documentation/",
+  "target_directory": ".github/tools/sync-config/documentation/",
   "glob": {
     "recursive": true
   },
@@ -321,7 +321,7 @@ Sync workflow manifest documentation recursively:
   "source_repo": "BionicCode/workflows",
   "source_ref": "main",
   "source_glob": ".github/scripts/sync-files-from-manifest/documentation/**/*.md",
-  "target_directory": ".github/sync-config/documentation/",
+  "target_directory": ".github/tools/sync-config/documentation/",
   "glob": {
     "recursive": true
   },
@@ -356,8 +356,8 @@ New callers should use `sync-files-from-manifest.yml`; the `.editorconfig`-speci
 Migration steps:
 
 1. Add the generic caller workflow to the caller or template repository.
-2. Run the caller workflow from the default branch to initialize `.github/sync-config`.
-3. Edit and commit `.github/sync-config/sync-manifest.json` with the real managed-file defaults.
+2. Run the caller workflow from the default branch to initialize `.github/tools/sync-config`.
+3. Edit and commit `.github/tools/sync-config/sync-manifest.json` with the real managed-file defaults.
 4. Remove the legacy `.editorconfig` redirect workflow from the caller/template repository.
 5. Pin the reusable workflow to a release tag or, preferably, a full commit SHA after the first tested release.
 

@@ -14,7 +14,7 @@ from common import (
 )
 
 
-CALLER_CONFIG_DIR = Path(".github/sync-config")
+CALLER_CONFIG_DIR = Path(".github/tools/sync-config")
 CALLER_SCHEMA_NAME = "sync-manifest.schema.json"
 CALLER_MANIFEST_NAME = "sync-manifest.json"
 CALLER_DOCUMENTATION_DIR = "documentation"
@@ -88,7 +88,7 @@ def build_pr_body(changed_paths: list[str], manifest_created: bool) -> str:
             [
                 "",
                 "The starter manifest is intentionally minimal. "
-                "Edit `.github/sync-config/sync-manifest.json` in the template repository "
+                "Edit `.github/tools/sync-config/sync-manifest.json` in the template repository "
                 "to define the real managed-file defaults inherited by descendant repositories.",
             ]
         )

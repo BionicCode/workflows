@@ -426,7 +426,7 @@ class SourceGlobValidationTests(unittest.TestCase):
         glob = self.validate_manifest(
             manifest_entry_payload(
                 source_glob=".github/scripts/**/*.md",
-                target_directory=".github/sync-config/",
+                target_directory=".github/tools/sync-config/",
                 glob={"recursive": True},
             )
         )
@@ -509,6 +509,19 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("target_directory", text)
         self.assertIn("Path Naming Rules", text)
         self.assertIn("directory root", text)
+
+    def test_public_docs_use_canonical_sync_config_path(self) -> None:
+        canonical_path = ".github/tools/sync-config/"
+        legacy_path = ".github/sync-config/"
+
+        for relative_path in (
+            "README.md",
+            ".github/scripts/sync-files-from-manifest/documentation/sync-manifest.md",
+        ):
+            with self.subTest(relative_path=relative_path):
+                text = self.read_doc(relative_path)
+                self.assertIn(canonical_path, text)
+                self.assertNotIn(legacy_path, text)
 
 
 class SourceGlobExpansionTests(unittest.TestCase):
