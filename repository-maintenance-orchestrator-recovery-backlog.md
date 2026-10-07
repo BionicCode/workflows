@@ -188,7 +188,7 @@ Each caller repository owns:
 - a generated thin local wrapper;
 - local copied schema and documentation for discoverability/editor support.
 
-Workflows never discovers or broadcasts to descendants. A caller explicitly invokes initialization, upgrade, metadata maintenance, or synchronization.
+Workflows never discovers or broadcasts to descendants. Package installation and upgrade are explicitly dispatched in Workflows for a named destination repository; recurring metadata maintenance and synchronization remain caller-owned invocations.
 
 ### 4.2 True reusable doc-metadata workflow
 
@@ -238,7 +238,15 @@ This preserves a stable local interface while keeping one implementation authori
 
 ### 4.4 Installation and upgrade model
 
-The Workflows repository must expose a reusable repository-tool installer with an explicit `init` command. The exact filename may be selected in Plan Mode, but the public contract must distinguish:
+The Managed Package Installer is a generic administrative capability owned by `BionicCode/workflows`. Source packages define their identity, payload, generated surfaces, and sync intent. The installer validates and registers that contract in the destination and delegates ordinary file materialization and verification to the managed-file sync engine. The maintenance orchestrator does not discover, install, upgrade, or migrate packages.
+
+Package-installing workflows must expose central `workflow_dispatch` entry points in Workflows that ask for the destination repository. Installation must work without an adopter-side installer/init caller script, including when the target has no sync caller yet. Generated thin callers for recurring service execution remain valid installed surfaces. Central entry points delegate to the reusable implementation; the underlying initialization/provisioning and service-execution branches remain distinct and compatible.
+
+This direction supersedes earlier target-owned installer/bootstrap-caller proposals. It also changes the installation trust context: a Workflows dispatch must not assume that `github.repository` or its [repository-scoped `GITHUB_TOKEN`](https://docs.github.com/en/actions/concepts/security/github_token) identifies or authorizes writes to the destination. Revised W6 must approve explicit destination validation, scoped destination-write authority, separate source-read authority, checkout isolation, and PR delivery before implementation. No credential mechanism or new workflow filename is selected by this amendment.
+
+Managed-file sync is an early installation client of the generic installer; doc-metadata uses the same installer. The installer can invoke the already-central sync engine during bootstrap, so a destination-side sync caller is not a prerequisite and no runtime installer/sync cycle is introduced. Existing specialized adoption/init mechanisms remain available until separately approved parity and migration gates permit retirement.
+
+The exact package schemas, workflow interfaces, compatibility treatment, and rollout require the post-W5 architecture gate. The public contract must distinguish:
 
 ```text
 command=init
@@ -246,11 +254,11 @@ command=upgrade
 command=validate-installation
 ```
 
-`init` and `upgrade` create or update one reviewable caller PR.
+`init` and `upgrade` create or update one reviewable destination PR. Resolve package source coordinates to one immutable runtime snapshot; persistent source-channel policy remains package-defined rather than hard-coded in the generic installer.
 
 The installer must render the exact called Workflows commit SHA into the thin wrapper. Re-running the installer at a newer SHA is the controlled upgrade mechanism.
 
-The initializer installs or updates, as one coherent package version:
+For doc-metadata, the generic installer installs or updates, as one coherent package version:
 
 - generated thin wrapper;
 - caller-owned default doc-metadata manifest when missing;
@@ -381,6 +389,19 @@ A filename migration is incomplete until every literal path reference is updated
 
 Because a cross-repository reusable-workflow reference contains the exact workflow path, externally consumed old paths require an explicit compatibility and removal plan. A rename must not silently break existing callers.
 
+### 4.10 Managed-file sync set modes
+
+**Planned extension:** preserve current additive behavior as the default and add selectable set-replace. Set reconciliation must be selectable independently of file lifecycle; this amendment does not implement it.
+
+- **Additive/union** remains the backward-compatible default: create missing selected files and update existing files according to lifecycle/scope policy; retain target files absent from the current source set.
+- **Full set-replace** additionally removes stale target files that belong to the managed destination set but are absent from the complete current source projection. This must support package upgrades that remove or rename previously installed managed files, including file retirement when the installer changes or removes obsolete registrations.
+
+Set-replace grants no additional ownership. Additions, replacements, and removals must obey the approved lifecycle and scope contract. Existing caller-owned `seed_once` files, disabled entries, exact self-canonical files, unrelated files/entries, generated installer-owned wrappers, and local marker content remain protected. Whole-file deletion requires whole-file retirement authority; a partially managed file must not be deleted merely because its source member disappears. Ambiguous authority is a conflict, not permission to delete.
+
+Revised W6 must define the selectable contract, default, managed destination membership, and the ownership evidence needed to detect removed files or registrations after they disappear from the current source definition. A target directory alone does not establish ownership of every file within it. Reconciliation must account for all active entries/packages so one set cannot delete a target still owned by another. Ordinary sync continues to consume its target sync manifest; package discovery/registration stays with the installer.
+
+Deletion planning requires a complete, coherent source snapshot and valid destination-ownership evidence. Missing credentials, fetch failures, truncated listings, or unsupported selectors must not be interpreted as an empty source set. An intentionally empty set and its retirement behavior require an explicit approved contract and witnesses. Plan and validate all changes before any writes; verification detects stale managed members without deleting them, and reports/PRs include planned removals.
+
 ## 5. Session separation
 
 ### Session A — Workflows implementation
@@ -397,7 +418,8 @@ Session A must deliver:
 
 - authoritative reusable doc-metadata engine;
 - safe harness and fresh tests;
-- package-aware initializer/upgrader;
+- generic Managed Package Installer with central destination-selecting dispatch;
+- selectable additive and managed set-replace synchronization;
 - generated thin wrapper template/renderer;
 - sync ownership plan;
 - canonical version authority enforcement;
@@ -419,7 +441,7 @@ Session B cannot start until the Session A release gate is accepted and records 
 
 Session B must:
 
-- run the approved initializer/upgrade against the template caller;
+- explicitly dispatch the approved Workflows installer/upgrade for the template destination without an adopter-side installer/init caller;
 - install the generated wrapper and package surfaces;
 - preserve caller-owned manifest policy;
 - switch orchestration to the wrapper;
@@ -440,6 +462,16 @@ Apply the lifecycle and handoff rules in [backlog-workflow-documentation.md](bac
 
 For this recovery, pass-completion checkboxes and the evidence ledger are maintainer-controlled state. They may change only through current user authorization that explicitly permits the exact coordination update. Execution, validation, or self-review alone does not complete a pass or unlock later work. The task-specific execution handoff supplies the literal pre-pass baseline and runtime lease.
 
+### Mandatory post-W5 architecture gate
+
+W2, W2A, W2B, W3, W4, and W5 retain their existing scope and order, subject to their ordinary start/stop, review, and evidence gates. Neither central provisioning nor set-replace implementation belongs in those passes.
+
+After W5 is accepted and fully finalized, hold recovery before W6 activation. The maintainer must accept a Managed Package Installer architecture reconciled against the exact accepted W5 SHA, including central destination dispatch and managed-set retirement. A separately authorized coordination update must then finalize W6/W8 contracts and reconcile downstream dependencies, validation, and documentation with that design. The requirements below record direction and owning passes; they are not a completed architecture design or an execution handoff.
+
+W6 owns contract and permission decisions; W8 owns generic provisioning/registration/bootstrap; W9/W10 own shared set-membership/retirement classification and sync execution; W11 exposes the corresponding closed ownership facts. W13 proves end-to-end package-upgrade and cross-engine convergence after those implementations, and W17 certifies them before T1/T4 external destination evidence. This keeps file deletion in the shared sync engine and avoids a second installer-specific deletion path or a W8/W10 prerequisite cycle.
+
+Passing the architecture gate only makes revised W6 eligible for separately authorized activation. This amendment changes no pass status, completion checkbox, accepted evidence, or execution lease.
+
 ### Ordered pass index
 
 This index is navigation, not a second evidence ledger. The status values mirror the authoritative ledger in section 9.
@@ -454,7 +486,7 @@ This index is navigation, not a second evidence ledger. The status values mirror
 | W3 | Contain broken Workflows self-orchestration | implementation | W2B | Locked |
 | W4 | Stabilize the PowerShell acceptance harness | implementation | W3 | Locked |
 | W5 | Establish fresh executable baseline | validation-only | W4 | Locked |
-| W6 | Approve the reusable workflow and package contract | planning | W5 | Locked |
+| W6 | Approve the reusable workflow and package contract | planning | W5 + architecture gate | Locked |
 | W7 | Convert doc-metadata into the authoritative reusable engine | implementation | W6 | Locked |
 | W8 | Implement package-aware init/upgrade | implementation | W7 | Locked |
 | W9 | Implement one shared sync authority classifier | implementation | W8 | Locked |
@@ -477,6 +509,8 @@ This index is navigation, not a second evidence ledger. The status values mirror
 ### Project-specific historical exception
 
 W0 and W1 were accepted before this backlog adopted the normalized pass template. Their original inline specifications intentionally remain historical and are not reopened or rewritten merely because they omit fields introduced later. This presentation exception does not waive ledger integrity or permit accepted historical evidence to be changed or recorded inaccurately.
+
+The central-dispatch and set-replace requirements extend planned behavior; they do not invalidate W1's historical documentation-authority/current-state audit or reopen W1. W2 retains its exact current-state documentation scope. Later owning passes must update and review affected product docs, schemas, examples, and migration guidance when implementing the new contracts. Any independently demonstrated defect in W1 evidence or W2 scope requires a separate authorized governance correction.
 
 # Session A — `BionicCode/workflows`
 
@@ -798,6 +832,8 @@ Record runtime versions and exact commit.
 
 Any failure becomes a separate bounded pass. Historical green runs do not replace this gate.
 
+**Follow-up effect:** after acceptance and full ledger finalization, stop at the [mandatory post-W5 architecture gate](#mandatory-post-w5-architecture-gate). Do not activate W6 using its unreconciled package-contract assumptions.
+
 ---
 
 ## W6 — Approve the reusable workflow and package contract
@@ -806,8 +842,18 @@ Any failure becomes a separate bounded pass. Historical green runs do not replac
 
 **Mode:** Plan Mode.
 
-Must specify:
+**Activation prerequisite:** the post-W5 architecture gate has been satisfied and a separately authorized coordination update has finalized this contract. Preserve W7's reusable doc-metadata engine boundary and reframe W8 around the generic installer rather than a second sync/doc-metadata-specific initializer.
 
+Must reconcile and specify:
+
+- generic Managed Package Installer, package-definition, sync-engine, and maintenance-orchestrator boundaries;
+- central `workflow_dispatch` destination input, validation/authorization, scoped destination-write and source-read credentials, default-branch discovery, source/target movement guards, and one reviewable destination PR;
+- installation without an adopter-side installer/init caller, while preserving reusable initialization and service-execution branches and installed recurring-service callers;
+- package manifests versus package-local sync definitions, shared sync semantics, source-coordinate binding, generated artifacts, immutable runtime snapshots, and persistent package-channel policy;
+- additive default versus selectable set-replace, selection scope, lifecycle/marker protections, managed destination membership, prior ownership/retirement evidence, removed/renamed files or registrations, cross-entry/package conflicts, and intentionally empty-source handling;
+- verification, removal reporting, no-write-on-planning-failure, application failure/rollback, and the closed ownership-plan representation of retirement facts;
+- compatibility/retirement gates for existing specialized adopters and init paths, with managed-file-sync and doc-metadata as generic installation clients and backlog adoption as a later parity witness;
+- separate installation-dispatch and recurring-service checkout/token matrices;
 - canonical role-suffixed workflow filenames and compatibility paths approved by W2A/W2B;
 - stable caller inputs, secrets, outputs, and permissions;
 - caller/base/head checkout matrix;
@@ -834,7 +880,7 @@ Must specify:
 
 - [ ] **Completed**
 
-**Goal:** make Workflows the only executable engine authority.
+**Goal:** make Workflows the only executable doc-metadata engine authority under the accepted revised W6 boundary. Package provisioning remains W8's responsibility.
 
 **Expected files:**
 
@@ -871,12 +917,15 @@ Must specify:
 
 - [ ] **Completed**
 
-**Goal:** install a coherent doc-metadata caller package through an explicit init command.
+**Goal:** implement the generic Managed Package Installer approved by revised W6, with central destination-selecting dispatch and reusable implementation. Provision managed-file-sync into a clean target without a preinstalled installer/init caller, and provision the coherent doc-metadata caller package through the same abstraction.
+
+**Dependencies:** W7 remains the immediate predecessor; accepted revised W6 supplies the exact implementation contract and allowlist. W8 establishes provisioning, registration, and bootstrap. Shared set-replace retirement is implemented in W9/W10, exposed in W11, and integrated/proven for package upgrades in W13/W17. W8 acceptance covers upgrades without payload retirement; a requested set-replace upgrade requiring retirement must not be reported complete using an additive fallback. Do not duplicate deletion logic or claim that later acceptance evidence already exists.
 
 **Expected surfaces:**
 
-- reusable installer workflow;
-- package renderer/installer script;
+- central administrative dispatch entry points asking for the destination repository;
+- reusable generic installer workflow;
+- package definitions and renderer/configurator using shared sync materialization;
 - wrapper template;
 - package tests;
 - sync-init path corrections;
@@ -885,7 +934,9 @@ Must specify:
 **Required installer behavior:**
 
 - `init`, `upgrade`, and `validate-installation`;
-- checks out caller and exact Workflows implementation commit;
+- validates the explicitly selected destination and its write authority without requiring an adopter-side installer/init workflow;
+- checks out destination, exact Workflows implementation commit, and one coherent immutable package-source snapshot in separate trusted paths;
+- preserves the reusable init/service branches and recurring-maintenance caller contract;
 - renders literal `job.workflow_sha` into wrapper;
 - creates one PR;
 - preserves caller-owned manifest when present;
@@ -895,11 +946,11 @@ Must specify:
 - preserves unrelated caller sync entries;
 - rejects conflicting managed entries;
 - idempotent second run is no-op;
-- upgrade from SHA A to SHA B changes all package surfaces coherently;
-- never copies engine or tests;
+- upgrade from SHA A to SHA B changes supported package surfaces coherently; set-replace payload-retirement acceptance follows the W9-W13 integration gate above;
+- never copies Workflows engine implementation or engine tests;
 - never silently writes directly to protected default branch.
 
-**Important:** the wrapper is installer-managed, not ordinary byte-for-byte sync content. Schema/docs entries must remain tied to the same pinned package SHA.
+**Important:** the wrapper is installer-managed, not ordinary byte-for-byte sync content. Schema/docs entries must remain tied to the same pinned package SHA. Package-specific paths and compatibility channels belong in package definitions; do not hard-code backlog policy into the generic installer. Preserve working specialized adopters until a separately authorized parity migration permits retirement.
 
 ---
 
@@ -918,7 +969,10 @@ Must specify:
 - target-exists state when relevant;
 - exact-self-canonical state;
 - write authority;
-- version authority.
+- version authority;
+- selected set mode and managed destination-set membership;
+- complete current source projection and the approved ownership evidence for stale/retired destinations;
+- retirement/deletion authority, including lifecycle/scope and other active entry/package claims.
 
 **Required lifecycle classification:**
 
@@ -930,7 +984,7 @@ seed_once target exists    -> no active write authority
 disabled                   -> no active write authority
 ```
 
-The classifier must reuse normalization, source-glob expansion, duplicate detection, and path safety. It must not create a parallel interpretation.
+The classifier must reuse normalization, source-glob expansion, duplicate detection, and path safety. It must not create a parallel interpretation. Classify stale managed destinations absent from the current projection as well as current members, using revised W6's retirement contract; missing or ambiguous ownership/source completeness fails closed. The lifecycle/version-authority rules above remain authoritative.
 
 ---
 
@@ -938,7 +992,7 @@ The classifier must reuse normalization, source-glob expansion, duplicate detect
 
 - [ ] **Completed**
 
-**Goal:** prevent planner/executor disagreement.
+**Goal:** prevent planner/executor disagreement and implement selectable set reconciliation from the shared classifier.
 
 **Required behavior:**
 
@@ -946,9 +1000,14 @@ The classifier must reuse normalization, source-glob expansion, duplicate detect
 - same repository but different source/target path remains real sync;
 - verify and sync consume classifier facts;
 - duplicate/generated-target behavior unchanged unless explicitly approved;
-- no write begins before complete plan succeeds.
+- no write begins before complete plan succeeds;
+- omitted set mode preserves additive behavior, including stale-file retention;
+- set-replace creates/updates under lifecycle policy and removes only proven stale managed destinations with retirement authority;
+- verification detects stale managed members without mutation; sync reports and PR changed-path inventories include removals;
+- incomplete sources, invalid/stale ownership evidence, conflicting claims, and unsupported deletion scope fail before writes;
+- apply the approved failure/rollback contract to additions, replacements, deletions, and any ownership-state update.
 
-**Validation:** full sync suite plus exact self/no-op matrix.
+**Validation:** full sync suite, exact self/no-op matrix, additive/default compatibility, set-replace removal/rename/empty-set cases, lifecycle/marker/unrelated-file protection, failure-before-write, and deletion application/rollback witnesses. Implementation, schema/runtime validation, workflow inputs, templates/examples, and user/API/type/migration docs must agree.
 
 ---
 
@@ -966,7 +1025,8 @@ The classifier must reuse normalization, source-glob expansion, duplicate detect
 - manifest path and digest;
 - completeness;
 - sorted unique targets;
-- neutral authority facts;
+- neutral authority facts, including selected set mode, managed membership, and retirement authority for planned removals;
+- source-set completeness and ownership-evidence identity needed to reject stale or ambiguous retirement facts;
 - no secrets or source content.
 
 **Failure must be closed for:**
@@ -978,7 +1038,8 @@ The classifier must reuse normalization, source-glob expansion, duplicate detect
 - source tree truncation;
 - unavailable private source;
 - oversized output;
-- incomplete plan.
+- incomplete plan;
+- missing/stale/ambiguous managed-set ownership evidence or conflicting retirement claims.
 
 Plan and actual sync must use the same Workflows commit.
 
@@ -996,6 +1057,7 @@ Plan and actual sync must use the same Workflows commit.
 - self-canonical `enforce`: allow;
 - existing `seed_once`: allow;
 - missing `seed_once`: reserve;
+- source-retired managed targets awaiting authorized removal: honor the ownership plan's reservation; do not rewrite them or infer retirement from package/source definitions independently;
 - disabled: allow normal doc governance;
 - stale/missing/invalid required plan: fail before writes;
 - separate report category for canonical-source authority;
@@ -1035,9 +1097,14 @@ Witnesses:
 - existing/missing seed_once;
 - disabled;
 - unowned document;
-- invalid/stale plan.
+- invalid/stale plan;
+- additive/default retains a source-removed target while set-replace removes the same proven managed target;
+- compatible package upgrade changes/removes obsolete registrations through the installer and retires removed/renamed managed payload through shared sync, while retaining retirement evidence and preserving coherent generated surfaces and caller-owned seeds/configuration;
+- unrelated target files, partially managed marker files, disabled/self-canonical entries, and targets claimed by another entry/package are protected;
+- explicitly supported empty source set versus unavailable/truncated source, stale ownership evidence, conflicting claims, and failed application/rollback;
+- central bootstrap into a target with no installer/init caller, followed by package upgrade and ordinary maintenance.
 
-Second pass must be no-op.
+Package-upgrade retirement acceptance depends on W8 provisioning and the completed W9-W12 classifier/execution/plan integration. Second pass must be no-op, with no file resurrection, reversal, or second PR.
 
 ---
 
@@ -1101,7 +1168,8 @@ Production changes require a failing test witness.
 Required:
 
 - all PowerShell and Python suites pass twice where required;
-- package init, no-op re-init, and upgrade fixtures;
+- generic central-dispatch provisioning of managed-file-sync and doc-metadata without an adopter-side installer/init caller, plus no-op re-init and compatible upgrade fixtures;
+- additive backward compatibility and managed set-replace package-removal/convergence fixtures from W13;
 - generated wrapper YAML/actionlint;
 - literal SHA equals release candidate;
 - schema/docs/default manifest match engine contract;
@@ -1119,7 +1187,7 @@ WORKFLOWS_RELEASE_CANDIDATE_SHA=<40-character SHA>
 
 ### External-caller limitation
 
-A pure Workflows test cannot prove every cross-repository permission and repair behavior. Session B begins with a non-destructive integration branch and parity gate. If that gate finds a shared-engine defect, migration stops and a bounded Workflows fix produces a new release candidate.
+A pure Workflows test cannot prove every cross-repository permission and repair behavior, including central-dispatch destination writes. Session B begins with a non-destructive integration branch and parity gate; T1/T4 must supply the external destination-install/upgrade and maintenance evidence before claiming that path is verified. If that gate finds a shared-engine defect, migration stops and a bounded Workflows fix produces a new release candidate.
 
 # Session B — `BionicCode/template-visual-studio-repository`
 
@@ -1142,7 +1210,7 @@ No implementation yet.
 
 - [ ] **Completed**
 
-Use the exact W17 SHA.
+Use the exact W17 SHA. Explicitly dispatch the Workflows installer with the template repository as destination; no adopter-side installer/init caller is required. Preserve installed thin callers used for recurring service execution.
 
 Expected PR changes:
 
@@ -1200,7 +1268,7 @@ Required:
 
 Use isolated branches/fixtures and run the complete sequence twice.
 
-No second-pass PR or reversal is allowed.
+Include an isolated central-dispatch compatible package upgrade that removes a package-managed file, followed by ordinary sync/doc-metadata maintenance. Confirm the removal, preserved caller-owned/unrelated state, and no resurrection. No second-pass PR or reversal is allowed.
 
 Do not merge PR #34 or PR #35.
 
@@ -1275,9 +1343,10 @@ Recovery is complete only when:
 
 - Workflows contains one authoritative doc-metadata engine;
 - callers contain no copied engine/tests;
-- initializer installs a coherent pinned package;
+- the generic Managed Package Installer provisions coherent pinned packages through central destination-selecting dispatch without an adopter-side installer/init caller;
+- additive/default and selectable managed set-replace behavior are proven, including removal of source-retired package files and protection of caller-owned/unrelated state;
 - schema/docs/wrapper share one package identity;
-- Workflows remains passive;
+- Workflows performs no autonomous cross-repository discovery/broadcast; package provisioning requires explicit administrative dispatch and stays outside the maintenance orchestrator;
 - ownership plan and sync share one classifier and commit;
 - canonical version authority prevents ping-pong;
 - two complete passes converge to no-op;
