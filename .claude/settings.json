@@ -1,0 +1,6 @@
+{
+  "claudeMdExcludes": [
+    "**/deployment/packages/agent-package/AGENTS.md",
+    "**/deployment/packages/agent-package/bridges/claude/CLAUDE.md"
+  ]
+}

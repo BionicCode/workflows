@@ -54,7 +54,23 @@
         "includeSeparator": true,
         "spacingBreaks": 2
       }
-    }
+    },
+    "deployment/packages/agent-package/**/*.md",
+    ".github/tools/agent-package/**/*.md",
+    ".agent/instructions/custom/**/*.md"
   ],
-  "exclude": []
+  "exclude": [
+    "deployment/packages/agent-package/REVIEW.md",
+    "deployment/packages/agent-package/bridges/claude/CLAUDE.md",
+    ".agent/REVIEW.md",
+    "CLAUDE.md",
+    "CLAUDE.local.md",
+    "AGENTS.md",
+    ".agent/README.md",
+    ".agent/instructions/README.md",
+    ".agent/instructions/package/**/*.md",
+    ".github/copilot-instructions.md",
+    ".github/instructions/dotnet.instructions.md",
+    ".github/instructions/test.instructions.md"
+  ]
 }

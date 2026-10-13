@@ -1,7 +1,7 @@
 ---
-Version: 1.3
-Created: 2026-05-25T23:40:38+00:00
-Updated: 2026-05-26T19:08:35+00:00
+Version: 1
+Created: 2026-10-13T20:27:24+00:00
+Updated: 2026-10-13T20:27:24+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -17,7 +17,21 @@ Author: BionicCode
 <br>
 <!-- doc-metadata-presentation:end -->
 
-# DOCUMENTATION.md
+# Documentation instructions
+
+Read for documentation, comments, examples, instruction Markdown, or behavior changes that require documentation. These portable rules combine with the other files selected by the root router.
+
+## Documentation and Comments
+- Add meaningful code comments where names alone are not enough to explain intent, invariants, trade-offs, caveats, failure modes, unsupported scenarios, or non-obvious behavior.
+- Prefer improving structure and naming before adding explanatory comments that compensate for avoidably unclear code.
+- Do not add comments that merely restate the code.
+- Use XML or language-native API documentation comments for public or externally consumed APIs when the repository already uses them, or when you introduce or significantly change public surface area.
+- Use proper XML documentation tags and language-aware markup such as `<see cref="..."/>` and `<see langword="null"/>` where appropriate.
+- Use correct documentation syntax and language-aware markup where supported.
+- If a change introduces non-obvious API usage, data structures, workflow expectations, or extension points, add or update a small Markdown document in the repository's preferred documentation location as described in the [File System and Project Structure](ENGINEERING.md#file-system-and-project-structure) section.
+- Keep documentation aligned with implemented behavior; stale documentation is a defect.
+
+Follow the detailed documentation rules below.
 
 ## Purpose
 This file defines repository documentation expectations for Codex and human contributors.
@@ -31,7 +45,7 @@ Use the smallest documentation layer that fully explains the change:
 
 1. **Source comments** for non-obvious implementation intent.
 2. **XML documentation comments** for API surface.
-3. **Markdown documentation** for consumer guidance, data structures, workflows, behavior notes, and examples. Markdown files have to go under top-level [/docs](/docs/) directory in the repository root. You can create subfolder if appropriate.
+3. **Markdown documentation** for consumer guidance, data structures, workflows, behavior notes, and examples. Follow the established documentation layout; otherwise use the top-level `docs/` directory in the repository root. You can create a subfolder if appropriate. Governance instructions, local configuration, and agent bridges keep their established root, `.agent/`, and `.github/` locations.
 
 Do not push everything into one layer.
 
@@ -218,8 +232,3 @@ Before finishing, verify:
 - `null`, `true`, `false`, and code symbols use semantic XML markup where appropriate,
 - Markdown docs are updated when consumers need examples or data-model explanation,
 - and no stale comments remain that contradict the implementation.
-
-<!-- BEGIN REPOSITORY SPECIFICS -->
-<!-- Repository owners may edit only this section -->
-
-<!-- END REPOSITORY SPECIFICS -->

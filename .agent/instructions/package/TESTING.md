@@ -1,7 +1,7 @@
 ---
 Version: 1
-Created: 2026-05-25T23:40:39+00:00
-Updated: 2026-05-26T19:08:35+00:00
+Created: 2026-10-13T20:27:25+00:00
+Updated: 2026-10-13T20:27:25+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -17,16 +17,11 @@ Author: BionicCode
 <br>
 <!-- doc-metadata-presentation:end -->
 
-# AGENTS.md
+# Testing instructions
 
 ## Purpose
-This file refines the repository-wide `AGENTS.md` for work under the `test/` folder.
 
-Follow user instructions first.
-Follow the repository root `AGENTS.md` second.
-This file adds stricter rules for automated tests and overrides broader guidance only for test code.
-
----
+These instructions apply when planning, creating, changing, reviewing, or diagnosing automated tests, fixtures, assertions, or test execution, regardless of their directory or language. They add the existing stricter rules for test code. User instructions and the root precedence rules apply. Established repository layout and concrete local configuration take precedence over template location and project-name defaults below.
 
 ## Test Philosophy
 - Treat test code as production-quality code for readability, maintainability, and review rigor.
@@ -128,7 +123,6 @@ This file adds stricter rules for automated tests and overrides broader guidance
 
 ## Async and Time-Sensitive Tests
 - Test asynchronous code asynchronously.
-- Prefer `Task` and `Task<T>`-based test flows; avoid `async void` in test code except where the framework explicitly requires it.
 - Do not rely on arbitrary sleeps or timing races when a deterministic synchronization point is available.
 - Abstract clocks, timers, randomness, and environment-dependent values when they affect repeatability.
 - Keep time-sensitive tests deterministic enough that failures indicate a product issue or a real test-design issue rather than scheduler luck.
@@ -143,8 +137,7 @@ This file adds stricter rules for automated tests and overrides broader guidance
 ---
 
 ## Organization Under `test/`
-- Keep automated test projects under the repository root `test/` folder.
-- Name generated unit test projects `<SolutionName>.Tests` unless the repository defines a more specific test-project naming convention.
+- Follow the repository's established test layout; default to the root `test/` folder only when no owning test layout exists.
 - Keep test-only helpers, fixtures, builders, and sample inputs close to the owning test project unless the repository already defines a shared test-assets location.
 - Separate true unit tests from slower integration, filesystem, network, database, UI, or end-to-end tests when the repository distinguishes them.
 - If the repository uses multiple test types, keep the test type obvious from project name, folder path, or test metadata.
@@ -169,8 +162,3 @@ When reviewing or generating tests, prioritize in this order:
 5. Minimal, relevant setup
 6. Appropriate use of parameterization and test doubles
 7. Execution speed relative to test type
-
-<!-- BEGIN REPOSITORY SPECIFICS -->
-<!-- Repository owners may edit only this section -->
-
-<!-- END REPOSITORY SPECIFICS -->

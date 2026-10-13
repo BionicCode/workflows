@@ -25,7 +25,7 @@ The supporting authorities are:
 - [backlog-workflow-documentation.md](backlog-workflow-documentation.md) for the reusable pass lifecycle, admission, handoff, and orchestration rules;
 - [evidence-ledger-documentation.md](evidence-ledger-documentation.md) for ledger columns, states, transitions, and evidence invariants;
 - [repository-review-protocol.md](repository-review-protocol.md) for repository evidence, start, stop, validation, and review gates;
-- [AGENTS.md](AGENTS.md), [AGENT_GUARDRAILS.md](AGENT_GUARDRAILS.md), [DOCUMENTATION.md](DOCUMENTATION.md), and any applicable path-specific instruction file for repository execution and documentation rules.
+- [AGENTS.md](AGENTS.md), the selected [.agent/instructions/package/](.agent/instructions/package/) modules and matching [.agent/instructions/custom/](.agent/instructions/custom/) companions, and applicable native nested/client-local instructions for repository execution and documentation rules.
 
 This file does not authorize repository or GitHub writes by itself. Every activated pass, in every task mode, requires current user authorization and an authorized execution handoff that supplies the exact runtime scope and lease.
 
@@ -559,7 +559,8 @@ The central-dispatch and set-replace requirements extend planned behavior; they 
 **Required review scope:**
 
 - root `README.md`;
-- root `AGENTS.md`, `AGENT_GUARDRAILS.md`, and `DOCUMENTATION.md`;
+- root `AGENTS.md`, `.agent/README.md` and `.agent/instructions/**`;
+- authoritative `deployment/packages/agent-package/**`, root `CLAUDE.md`/`CLAUDE.local.md`, and publisher `.claude/settings.json`;
 - nested `AGENTS.md` and `AGENTS.override.md` files;
 - `.github/copilot-instructions.md` and `.github/instructions/**/*.instructions.md`;
 - workflow documentation;

@@ -585,10 +585,11 @@ The following files are read-only by default because they define agent behavior,
 
 * root and nested `AGENTS.md`;
 * root and nested `AGENTS.override.md`;
-* `AGENT_GUARDRAILS.md`;
+* `deployment/packages/agent-package/**`;
+* `.agent/README.md` and `.agent/instructions/**`;
+* `CLAUDE.md`, `CLAUDE.local.md`, and publisher `.claude/settings.json`;
 * `.github/copilot-instructions.md`;
 * `.github/instructions/**/*.instructions.md`;
-* root `DOCUMENTATION.md` when it defines mandatory documentation policy;
 * `repository-maintenance-orchestrator-recovery-backlog.md`;
 * `repository-review-protocol.md`;
 * `.github/CODEOWNERS`, when present.

@@ -1,7 +1,7 @@
 ---
 Version: 1
-Created: 2026-05-25T23:40:38+00:00
-Updated: 2026-05-26T19:08:34+00:00
+Created: 2026-10-13T20:27:24+00:00
+Updated: 2026-10-13T20:27:24+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -17,23 +17,21 @@ Author: BionicCode
 <br>
 <!-- doc-metadata-presentation:end -->
 
-# AGENT_GUARDRAILS.md 
-
-Version: x
+# Repository guardrails
 
 ## Purpose
 
-This file defines cross-repository guardrails for coding agents working in repositories derived from `template-visual-studio-repository`.
+This file defines cross-repository guardrails for coding agents working in repositories.
 
 Use this file together with:
 
-- `AGENTS.md`
-- `DOCUMENTATION.md`
-- `src/AGENTS.md` when working under `src/`
-- `test/AGENTS.md` when working under `test/`
-- `.github/instructions/*.instructions.md` when working through GitHub Copilot instruction surfaces
+- the [root router](../../../AGENTS.md) for task mode, precedence, and additive routing;
+- [documentation instructions](DOCUMENTATION.md) for documentation work;
+- [domain instructions](DOTNET.md) for .NET / Visual Studio work;
+- [testing instructions](TESTING.md) for test work;
+- repository-local overlays and the agent bridge through which the task was entered.
 
-These guardrails are not a replacement for repository-specific instructions. Repository-specific commands, frameworks, paths, and exceptions belong in the `Repository Specifics` section of `AGENTS.md` or in a nested `AGENTS.md`.
+These guardrails are not a replacement for repository-specific instructions. Repository-specific commands, frameworks, paths, and exceptions belong in the matching `.agent/instructions/custom/<MODULE>.md` companion or an applicable native nested/client-local instruction. Template placeholders are not verified repository facts.
 
 ## When to read this file
 
@@ -41,7 +39,7 @@ Read and apply this file before planning or editing when the task touches any of
 
 - public APIs or externally consumed behavior;
 - build, test, packaging, CI, release, or deployment configuration;
-- repository instruction files such as `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, or `DOCUMENTATION.md`;
+- repository instruction files such as `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, or `.agent/instructions/package/DOCUMENTATION.md`;
 - schema, manifest, configuration, template, generated, or copied files;
 - security-sensitive behavior, path handling, file I/O, command execution, secrets, permissions, or network access;
 - migrations, compatibility behavior, or deprecations;
@@ -62,19 +60,21 @@ Read and apply this file before planning or editing when the task touches any of
 Treat these files as repository-governance surfaces:
 
 - `AGENTS.md`
-- `AGENT_GUARDRAILS.md`
-- `DOCUMENTATION.md`
 - `.github/copilot-instructions.md`
 - `.github/instructions/*.instructions.md`
-- nested `AGENTS.md` files
+- nested `AGENTS.md` and `AGENTS.override.md` files
+- `.agent/instructions/package/**/*.md` and `.agent/instructions/custom/**/*.md`
+- `.agent/README.md`, `.agent/instructions/README.md` and `.agent/REVIEW.md`
+- `CLAUDE.md`
 
 When modifying these files:
 
 - preserve the stable global character of the inherited template instructions;
-- keep repository-specific edits inside designated repository-specific sections or nested files;
-- do not remove marker fences unless explicitly requested;
-- keep mirrored or derived instruction files synchronized when the repository owns the copy;
-- report which instruction surfaces changed and why.
+- keep repository-specific edits inside matching custom companions or justified native nested/client-local files; shared canonical files must remain repository-agnostic;
+- do not mix publisher and repository ownership in package files;
+- keep mirrored or derived instruction files synchronized when the repository owns the copy; thin bridges must point to the canonical rules rather than carry a second rule body;
+- keep custom companions and native/client-local files out of publisher projection; synchronize `.agent/REVIEW.md` and optional `CLAUDE.md` only with `seed_once`, `whole_file`; existing review Log and Claude customizations must not be overwritten;
+- prominently report which instruction surfaces changed and why.
 
 ## Public contract consistency
 
@@ -183,7 +183,8 @@ For guarded tasks, report:
 - unrelated dirty worktree state, if present;
 - follow-up migrations or downstream updates.
 
-<!-- BEGIN REPOSITORY SPECIFICS -->
-<!-- Repository owners may edit only this section -->
-
-<!-- END REPOSITORY SPECIFICS -->
+## Instruction maintenance
+- Keep the root router focused on execution rules, validation expectations, review behavior, and repository-wide conventions.
+- Put detailed workflow instructions for recurring specialized tasks in separate repository files, nested `AGENTS.md` files, or skills, and reference them from this file when needed.
+- Keep repository-specific commands, framework choices, and detailed local processes in matching custom companions or a more specific native/client-local instructions file.
+- Recommended CI approach: protect the shared router and canonical instruction files, while leaving repository-owned companions separate; CI integration is repository-specific.

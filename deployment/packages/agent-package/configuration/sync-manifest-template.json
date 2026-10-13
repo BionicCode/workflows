@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "source_repo": "BionicCode/workflows",
+      "source_ref": "main",
+      "target_directory": ".agent/",
+      "direction": "source_to_target",
+      "lifecycle_policy": "enforce",
+      "uniqueness_policy": "none",
+      "managed_scope": "whole_file",
+      "source_path": "deployment/packages/agent-package/README.md"
+    },
+    {
+      "source_repo": "BionicCode/workflows",
+      "source_ref": "main",
+      "target_directory": ".agent/",
+      "direction": "source_to_target",
+      "lifecycle_policy": "enforce",
+      "uniqueness_policy": "none",
+      "managed_scope": "whole_file",
+      "source_glob": "deployment/packages/agent-package/instruction-package/**/*",
+      "glob": {
+        "recursive": true,
+        "include_hidden": true
+      }
+    },
+    {
+      "source_repo": "BionicCode/workflows",
+      "source_ref": "main",
+      "target_directory": ".agent/",
+      "direction": "source_to_target",
+      "lifecycle_policy": "seed_once",
+      "uniqueness_policy": "none",
+      "managed_scope": "whole_file",
+      "source_path": "deployment/packages/agent-package/REVIEW.md"
+    },
+    {
+      "source_repo": "BionicCode/workflows",
+      "source_ref": "main",
+      "target_directory": "",
+      "direction": "source_to_target",
+      "lifecycle_policy": "seed_once",
+      "uniqueness_policy": "none",
+      "managed_scope": "whole_file",
+      "source_path": "deployment/packages/agent-package/bridges/claude/CLAUDE.md"
+    },
+    {
+      "source_repo": "BionicCode/workflows",
+      "source_ref": "main",
+      "target_directory": ".github/",
+      "direction": "source_to_target",
+      "lifecycle_policy": "enforce",
+      "uniqueness_policy": "none",
+      "managed_scope": "whole_file",
+      "source_path": "deployment/packages/agent-package/bridges/copilot/copilot-instructions.md"
+    },
+    {
+      "source_repo": "BionicCode/workflows",
+      "source_ref": "main",
+      "target_directory": ".github/instructions/",
+      "direction": "source_to_target",
+      "lifecycle_policy": "enforce",
+      "uniqueness_policy": "none",
+      "managed_scope": "whole_file",
+      "source_path": "deployment/packages/agent-package/bridges/copilot/instructions/dotnet.instructions.md"
+    },
+    {
+      "source_repo": "BionicCode/workflows",
+      "source_ref": "main",
+      "target_directory": ".github/instructions/",
+      "direction": "source_to_target",
+      "lifecycle_policy": "enforce",
+      "uniqueness_policy": "none",
+      "managed_scope": "whole_file",
+      "source_path": "deployment/packages/agent-package/bridges/copilot/instructions/test.instructions.md"
+    },
+    {
+      "source_repo": "BionicCode/workflows",
+      "source_ref": "main",
+      "target_directory": "",
+      "direction": "source_to_target",
+      "lifecycle_policy": "enforce",
+      "uniqueness_policy": "none",
+      "managed_scope": "whole_file",
+      "source_path": "deployment/packages/agent-package/AGENTS.md"
+    }
+  ],
+  "$schema": "../../../../.github/scripts/sync-files-from-manifest/schema/sync-manifest.schema.json"
+}
