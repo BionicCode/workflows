@@ -14,9 +14,47 @@ from unittest import mock
 
 from test_agent_package_source_contract import (
     ENGINE, EXCLUSIONS, MODULES, PREFIX, REPOSITORY, SOURCE, common,
-    execute_sync, local_source_files, normalized, powershell_recipe,
+    assert_claude_import, execute_sync, local_source_files, normalized, powershell_recipe,
     read_selected, registration, required_command, run_powershell, source_glob, sync_files,
 )
+
+
+SHARED_GUARDRAILS_PATHS = (
+    PREFIX + 'instruction-package/instructions/package/GUARDRAILS.md',
+    '.agent/instructions/package/GUARDRAILS.md',
+)
+WORKTREE_PROTECTION = '- Do not modify unrelated worktree state.'
+# Accepted migration contracts are independent of current source/install parity.
+SHARED_GUARDRAILS_RULES = (
+    WORKTREE_PROTECTION,
+    '- Do not weaken validation, tests, analyzers, documentation requirements, or review requirements to make a task easier.',
+)
+CUSTOM_GUARDRAILS_PATH = '.agent/instructions/custom/GUARDRAILS.md'
+PROTECTED_PATH_AUTHORIZATION = 'The following files are read-only unless the current user request explicitly names and authorizes the exact path:'
+RECOVERY_STATE_AUTHORIZATION = 'Only the maintainer may mark backlog passes complete, update the evidence ledger, or unlock later passes, unless the current prompt explicitly authorizes a coordination-only update to those exact files.'
+CUSTOM_GUARDRAILS_RULES = (
+    PROTECTED_PATH_AUTHORIZATION,
+    '* `repository-maintenance-orchestrator-recovery-backlog.md`;',
+    RECOVERY_STATE_AUTHORIZATION,
+)
+
+
+def assert_historical_context_preserved(content, migration):
+    """Compare checkout content with the recorded Git-blob content fingerprint."""
+    match = re.search(r'^\| `CLAUDE.local.md` \| `[0-9a-f]{64}` \| `([0-9a-f]{64})` \|$', migration, re.M)
+    if match is None:
+        raise AssertionError('Missing recorded CLAUDE.local.md Git-blob fingerprint.')
+    # Git may translate LF to CRLF; all other byte differences remain significant.
+    canonical_content = content.replace(b'\r\n', b'\n')
+    if hashlib.sha256(canonical_content).hexdigest() != match.group(1):
+        raise AssertionError('CLAUDE.local.md differs from its recorded Git-blob content.')
+
+
+def assert_conserved_policy(content, rules):
+    text = ' '.join(content.decode('utf-8').split())
+    for rule in rules:
+        if ' '.join(rule.split()) not in text:
+            raise AssertionError('Missing conserved policy: ' + rule)
 
 
 def expanded_projection():
@@ -86,7 +124,7 @@ class InstalledContractTests(unittest.TestCase):
         assert_enforced_parity(REPOSITORY)
 
     def test_initial_claude_copy_and_real_import(self):
-        self.assertTrue((REPOSITORY / 'CLAUDE.md').read_bytes().startswith(b'@AGENTS.md\n'))
+        assert_claude_import((REPOSITORY / 'CLAUDE.md').read_bytes())
 
     def test_only_meaningful_workflows_custom_companions_exist(self):
         directory = REPOSITORY / '.agent/instructions/custom'
@@ -107,11 +145,20 @@ class InstalledContractTests(unittest.TestCase):
         self.assertIn('self-contained review handoff', implementation)
         self.assertIn('current task explicitly authorizes its path', implementation)
 
-    def test_claude_local_is_byte_preserved_from_recorded_baseline(self):
+    def test_claude_local_preserves_recorded_git_blob_content(self):
         migration = (REPOSITORY / '.github/tools/agent-package/MIGRATION.md').read_text(encoding='utf-8')
-        match = re.search(r'\| `CLAUDE.local.md` \| `([0-9a-f]{64})`', migration)
-        self.assertIsNotNone(match)
-        self.assertEqual(match.group(1), hashlib.sha256((REPOSITORY / 'CLAUDE.local.md').read_bytes()).hexdigest())
+        assert_historical_context_preserved((REPOSITORY / 'CLAUDE.local.md').read_bytes(), migration)
+
+    def test_shared_guardrails_conserve_accepted_governance(self):
+        for relative in SHARED_GUARDRAILS_PATHS:
+            with self.subTest(path=relative):
+                assert_conserved_policy((REPOSITORY / relative).read_bytes(), SHARED_GUARDRAILS_RULES)
+
+    def test_workflows_guardrails_conserve_authorization_and_recovery_rules(self):
+        content = (REPOSITORY / CUSTOM_GUARDRAILS_PATH).read_bytes()
+        for rule in CUSTOM_GUARDRAILS_RULES:
+            with self.subTest(rule=rule):
+                assert_conserved_policy(content, (rule,))
 
     def test_legacy_framework_retired_after_traceable_preservation(self):
         for path in ('AGENT_GUARDRAILS.md', 'DOCUMENTATION.md', 'test/AGENTS.md', 'src/AGENTS.md', '.agent/REPOSITORY.md'):
@@ -160,6 +207,16 @@ class SynchronizationWitnessTests(unittest.TestCase):
             (root / '.agent/instructions/package/ENGINEERING.md').write_bytes(b'Drift\n')
             with self.assertRaisesRegex(common.ManifestError, 'out of sync'):
                 execute_sync(root, verify=True)
+
+    def test_enforced_parity_rejects_newline_only_drift(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); execute_sync(root)
+            installed = root / '.agent/instructions/package/ENGINEERING.md'
+            original = installed.read_bytes()
+            lf_content = original.replace(b'\r\n', b'\n')
+            installed.write_bytes(lf_content.replace(b'\n', b'\r\n') if original == lf_content else lf_content)
+            with self.assertRaisesRegex(AssertionError, 'Installed drift: .agent/instructions/package/ENGINEERING.md'):
+                assert_enforced_parity(root)
 
     def test_populated_review_and_custom_claude_survive_seed_once(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -319,6 +376,52 @@ class ExplicitMetadataWitnessTests(unittest.TestCase):
             files = {PREFIX + path.relative_to(root / PREFIX).as_posix(): path.read_bytes() for path in (root / PREFIX).rglob('*') if path.is_file()}
             execute_sync(root, files=files); execute_sync(root, files=files, verify=True)
             self.assertEqual(source.read_bytes(), installed.read_bytes())
+
+
+class HistoricalContextWitnessTests(unittest.TestCase):
+    BASELINE = b'@context/index.md\nKeep local context.\n'
+    BLOB_DIGEST = hashlib.sha256(BASELINE).hexdigest()
+    WORKTREE_DIGEST = hashlib.sha256(BASELINE.replace(b'\n', b'\r\n')).hexdigest()
+    MIGRATION = f'| `CLAUDE.local.md` | `{WORKTREE_DIGEST}` | `{BLOB_DIGEST}` |\n'
+
+    def test_historical_context_accepts_lf_and_crlf_checkouts(self):
+        for content in (self.BASELINE, self.BASELINE.replace(b'\n', b'\r\n')):
+            with self.subTest(content=content):
+                assert_historical_context_preserved(content, self.MIGRATION)
+
+    def test_historical_context_rejects_content_changes_and_omissions(self):
+        for content in (b'@other/index.md\nKeep local context.\n', b'@context/index.md\n', b''):
+            with self.subTest(content=content), self.assertRaisesRegex(AssertionError, 'differs from its recorded Git-blob content'):
+                assert_historical_context_preserved(content, self.MIGRATION)
+
+    def test_historical_context_requires_recorded_git_blob_fingerprint(self):
+        for migration in ('', f'| `CLAUDE.local.md` | `{self.WORKTREE_DIGEST}` | invalid |\n'):
+            with self.subTest(migration=migration), self.assertRaisesRegex(AssertionError, 'Missing recorded'):
+                assert_historical_context_preserved(self.BASELINE, migration)
+
+
+class PolicyConservationWitnessTests(unittest.TestCase):
+    def test_worktree_protection_loss_in_both_shared_copies_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative in SHARED_GUARDRAILS_PATHS:
+                destination = root / relative; destination.parent.mkdir(parents=True, exist_ok=True)
+                content = (REPOSITORY / relative).read_bytes()
+                destination.write_bytes(content.replace(WORKTREE_PROTECTION.encode('utf-8'), b''))
+            for relative in SHARED_GUARDRAILS_PATHS:
+                with self.subTest(path=relative), self.assertRaisesRegex(AssertionError, 'Missing conserved policy: - Do not modify unrelated worktree state'):
+                    assert_conserved_policy((root / relative).read_bytes(), SHARED_GUARDRAILS_RULES)
+
+    def test_local_authorization_and_recovery_rule_loss_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / CUSTOM_GUARDRAILS_PATH
+            destination.parent.mkdir(parents=True)
+            original = (REPOSITORY / CUSTOM_GUARDRAILS_PATH).read_bytes()
+            for rule in (PROTECTED_PATH_AUTHORIZATION, RECOVERY_STATE_AUTHORIZATION):
+                with self.subTest(rule=rule):
+                    destination.write_bytes(original.replace(rule.encode('utf-8'), b''))
+                    with self.assertRaisesRegex(AssertionError, 'Missing conserved policy'):
+                        assert_conserved_policy(destination.read_bytes(), CUSTOM_GUARDRAILS_RULES)
 
 
 if __name__ == '__main__':

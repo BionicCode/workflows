@@ -56,11 +56,18 @@ def run_powershell(root, script):
 
 def assert_empty_seed(content):
     text = content.decode('utf-8')
-    marker = '\n## Log\n'
-    if marker not in text or text.split(marker, 1)[1].strip():
+    lines = text.splitlines()
+    log_positions = [index for index, line in enumerate(lines) if line == '## Log']
+    if len(log_positions) != 1 or any(line.strip() for line in lines[log_positions[0] + 1:]):
         raise AssertionError('Source REVIEW must contain one empty Log.')
     if re.search(r'^\s*- \[[ xX]\]', text, re.M):
         raise AssertionError('Source REVIEW must not contain operational findings.')
+
+
+def assert_claude_import(content):
+    lines = content.decode('utf-8').splitlines()
+    if not lines or lines[0] != '@AGENTS.md':
+        raise AssertionError('Claude bridge must begin with the real @AGENTS.md import.')
 
 
 def router_rows(text):
@@ -238,7 +245,7 @@ class SourceContractTests(unittest.TestCase):
         self.assertNotIn('BEGIN REPOSITORY SPECIFICS', content)
 
     def test_claude_bridge_retains_real_import(self):
-        self.assertTrue((SOURCE / 'bridges/claude/CLAUDE.md').read_bytes().startswith(b'@AGENTS.md\n'))
+        assert_claude_import((SOURCE / 'bridges/claude/CLAUDE.md').read_bytes())
 
     def test_publisher_settings_include_both_narrow_exclusions(self):
         settings = json.loads((REPOSITORY / '.claude/settings.json').read_text(encoding='utf-8-sig'))
@@ -298,6 +305,41 @@ class SourceContractTests(unittest.TestCase):
                        'root-started', 'claude-md-or-agents-md', 'claude-md-and-agents-md', 'unrelated project instructions',
                        'custom companions', 'CLAUDE.local', 'compatibility restriction', 'duration_api_ms=0', 'pending'):
             with self.subTest(phrase=phrase): self.assertIn(phrase, text)
+
+
+class DocumentSemanticWitnessTests(unittest.TestCase):
+    def test_empty_review_log_accepts_lf_and_crlf(self):
+        for content in (b'# Review\n\n## Log\n', b'# Review\r\n\r\n## Log\r\n', b'# Review\n\n## Log'):
+            with self.subTest(content=content):
+                assert_empty_seed(content)
+
+    def test_review_seed_rejects_missing_or_malformed_log(self):
+        for content in (b'# Review\n', b'### Log\n', b'## Log: \n', b'##Log\r\n'):
+            with self.subTest(content=content), self.assertRaisesRegex(AssertionError, 'one empty Log'):
+                assert_empty_seed(content)
+
+    def test_review_seed_rejects_duplicate_log_sections(self):
+        with self.assertRaisesRegex(AssertionError, 'one empty Log'):
+            assert_empty_seed(b'# Review\r\n\r\n## Log\r\n\r\n## Log\r\n')
+
+    def test_review_seed_rejects_nonempty_log(self):
+        for content in (b'## Log\n- [ ] R01 [BUG] Finding\n', b'## Log\r\nUnexpected content\r\n'):
+            with self.subTest(content=content), self.assertRaisesRegex(AssertionError, 'one empty Log'):
+                assert_empty_seed(content)
+
+    def test_review_seed_rejects_findings_outside_log(self):
+        with self.assertRaisesRegex(AssertionError, 'operational findings'):
+            assert_empty_seed(b'# Review\r\n- [x] R01 [BUG] Finding\r\n\r\n## Log\r\n')
+
+    def test_claude_import_accepts_lf_and_crlf(self):
+        for content in (b'@AGENTS.md\n\nRouting\n', b'@AGENTS.md\r\n\r\nRouting\r\n', b'@AGENTS.md'):
+            with self.subTest(content=content):
+                assert_claude_import(content)
+
+    def test_claude_import_rejects_missing_or_incorrect_first_line(self):
+        for content in (b'', b'@OTHER.md\n', b'`@AGENTS.md`\r\n', b'# Bridge\n@AGENTS.md\n'):
+            with self.subTest(content=content), self.assertRaisesRegex(AssertionError, 'real @AGENTS.md import'):
+                assert_claude_import(content)
 
 
 if __name__ == '__main__':
