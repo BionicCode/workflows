@@ -1,7 +1,7 @@
 ---
-Version: 1
+Version: 2
 Created: 2026-10-13T20:27:24+00:00
-Updated: 2026-10-13T20:27:24+00:00
+Updated: 2026-10-24T21:52:05+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -64,8 +64,13 @@ Treat these files as repository-governance surfaces:
 - `.github/instructions/*.instructions.md`
 - nested `AGENTS.md` and `AGENTS.override.md` files
 - `.agent/instructions/package/**/*.md` and `.agent/instructions/custom/**/*.md`
-- `.agent/README.md`, `.agent/instructions/README.md` and `.agent/REVIEW.md`
+- `.agent/README.md` and `.agent/instructions/README.md`
 - `CLAUDE.md`
+
+Optional `.agent/REVIEW.md` is repository-owned operational review output, not an
+instruction or governance authority. Its existing Log may be maintained only through
+the root router's narrow formal-review exception and the effective CODE_REVIEW policy.
+This does not authorize modifying reviewed artifacts or other instruction surfaces.
 
 When modifying these files:
 

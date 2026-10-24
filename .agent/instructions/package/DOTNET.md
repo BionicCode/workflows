@@ -1,7 +1,7 @@
 ---
-Version: 1
+Version: 2
 Created: 2026-10-13T20:27:24+00:00
-Updated: 2026-10-13T20:27:24+00:00
+Updated: 2026-10-24T21:52:05+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -54,21 +54,25 @@ Typical .NET command sequence:
 # If restore is required
  dotnet restore <solution-or-project>
 
-# Build
- dotnet build <solution-or-project> --no-restore
-
-# Smallest relevant test scope
- dotnet test <test-project-or-solution> --no-build
-
-# Apply style/analyzer fixes from .editorconfig and analyzers
- dotnet format <solution-or-project> --no-restore
-
-# Final verification: fail if any formatting/analyzer drift remains
+# Verify style/analyzer compliance without applying fixes
  dotnet format <solution-or-project> --no-restore --verify-no-changes
+
+# If necessary, repair only authorized changes and repeat verification above.
+
+# Build the test project or containing solution, including its dependencies
+ dotnet build <test-project-or-containing-solution> --no-restore
+
+# Smallest relevant test scope, after that scope has been built
+ dotnet test <test-project-or-containing-solution> --no-build
+
+# After any later formatter/analyzer mutation, repeat affected build/test checks.
 ```
 
 Rules:
-- Do not use `dotnet format --verify-no-changes` as the only formatting step for implementation tasks. That only checks; it does not fix.
+- Verification-only formatting is sufficient when no repair is needed. Do not mutate files merely because an implementation task occurred.
+- Apply formatter or analyzer fixes only when necessary within authorized implementation scope. Protect unrelated files and unrelated dirty hunks; file filters alone do not protect dirty hunks within included files.
+- Fix task-caused diagnostics; verification is not permission to ignore them. Evidence-supported unrelated failures do not authorize broad cleanup.
+- Rebuild and rerun affected validation after any formatter or analyzer mutation so results describe the final source state.
 - If `--no-restore` fails because restore has not yet happened, run restore once and continue.
 - If tests fail, do not stop at the first red run. Investigate, fix, and rerun the smallest relevant build/test scope until the targeted tests pass or a concrete blocker prevents further progress.
 - Treat red tests caused by your changes as part of the task, not as optional follow-up work.
@@ -90,7 +94,7 @@ For .NET repositories:
 
 Important:
 - Command-line `dotnet build` does not automatically enforce all IDE code-style diagnostics unless the project enables build enforcement for code-style analysis.
-- Therefore, for implementation tasks, do not rely on build alone to prove `.editorconfig` compliance. Run `dotnet format` as part of validation.
+- Therefore, for implementation tasks, do not rely on build alone to prove `.editorconfig` compliance. Use the established repository validation path, or `dotnet format --verify-no-changes`, with necessary repairs constrained by the command policy above.
 - If the repository expects IDE-style rules to fail on build, honor project-level enforcement such as `EnforceCodeStyleInBuild`, `TreatWarningsAsErrors`, `AnalysisLevel`, and related settings when they are configured in shared props/targets files.
 
 ---
@@ -120,16 +124,105 @@ In addition to repository-wide engineering rules:
 ---
 
 ## Documentation expectations
-When code changes affect public APIs, externally consumed behavior, important invariants, non-obvious algorithms, caveats, or usage patterns:
-- update XML documentation comments for relevant public and protected APIs,
-- add concise source comments where names and structure alone do not explain intent,
-- and update or add a small Markdown documentation file when consumers need usage guidance, examples, data-model explanation, or behavior notes.
+Follow [DOCUMENTATION](DOCUMENTATION.md) for language-neutral source comments, API
+contract details, consumer guidance and stale-documentation safeguards. The language-specific
+syntax and XML requirements below apply to relevant .NET APIs.
 
-Minimum expectations:
-- Do not add comments that merely restate obvious syntax.
-- Do add comments for design intent, invariants, caveats, edge cases, unsupported scenarios, trade-offs, and surprising behavior.
-- Use proper XML documentation tags and language-aware markup such as `<see cref="..."/>` and `<see langword="null"/>` where appropriate.
-- Keep documentation aligned with the implemented behavior; stale documentation is a defect.
+### C# source comments
+For C# code, prefer single-line `//` comments over block comments when appropriate.
+Use comments for non-obvious intent rather than restating syntax. These examples
+illustrate comment quality, not verified behavior of the adopting repository.
+
+Bad:
+```csharp
+// Checks if the sequence is empty.
+if (!items.Any())
+{
+    ...
+}
+```
+
+Good:
+```csharp
+// Materialize once because upstream enumeration is stateful and may read from a forward-only FIT stream.
+var records = source.ToList();
+```
+
+Good:
+```csharp
+// Keep the original field order because downstream CSV consumers compare columns positionally.
+```
+
+Use contextual TODO/HACK markers rather than unexplained placeholders.
+
+Better:
+```csharp
+// TODO: Preserve developer field units once the SDK decoder exposes the original scale metadata.
+```
+
+Worse:
+```csharp
+// TODO: Fix this.
+```
+
+### XML documentation comments for applicable .NET APIs
+For languages supporting .NET XML documentation comments, document public types and public members at a minimum. Also document protected or extension-oriented members when callers are expected to depend on them.
+
+When XML docs are required:
+- new public classes, records, structs, interfaces, enums, and delegates,
+- new public constructors, methods, properties, events, and fields,
+- changed public behavior,
+- changed nullability, exception behavior, units, ordering guarantees, or mutation semantics.
+
+Minimum XML documentation quality:
+- Every documented API should have a clear `<summary>`.
+- Use complete sentences.
+- Document each parameter with `<param>` when parameters are non-trivial or behavior depends on them.
+- Use `<returns>` for methods and properties where the return meaning is not already obvious.
+- Use `<exception>` for meaningful documented exceptions.
+- Use `<remarks>` for caveats, ordering guarantees, performance notes, mutability, threading, or format constraints.
+- Use `<example>` when a short usage snippet materially helps consumers.
+
+Prefer semantic XML tags over plain text:
+- Use `<see cref="T:Namespace.TypeName"/>` or `<see cref="MemberName"/>` for code references.
+- Use `<paramref name="value"/>` for parameter references.
+- Use `<typeparamref name="T"/>` for generic type parameters.
+- Use `<c>` for inline code and `<code>` for multi-line code.
+- Use `<see langword="null"/>`, `<see langword="true"/>`, and similar language keywords instead of quoted plain text where appropriate.
+
+Examples:
+
+```csharp
+/// <summary>
+/// Tries to locate the session message that best represents the completed activity.
+/// </summary>
+/// <param name="messages">The decoded FIT messages in source order.</param>
+/// <returns>
+/// The selected session message, or <see langword="null"/> when the FIT file does not contain session data.
+/// </returns>
+/// <remarks>
+/// When multiple session messages are present, the implementation currently prefers the last complete message.
+/// This matches Garmin export behavior observed in the repository test data but may require revision for multi-sport activities.
+/// </remarks>
+public static SessionMesg? TryGetPrimarySession(IReadOnlyList<Mesg> messages)
+```
+
+```csharp
+/// <summary>
+/// Gets the average speed in meters per second.
+/// </summary>
+/// <remarks>
+/// The value is the decoded FIT session field value before any user-facing unit conversion.
+/// </remarks>
+public double AverageSpeedMetersPerSecond { get; }
+```
+
+Avoid weak summaries such as:
+- “Gets or sets the value.”
+- “Initializes a new instance.” without saying what the type represents.
+- “Does processing.”
+
+If the repository enables XML documentation file generation, keep public XML docs warning-free.
 
 ---
 

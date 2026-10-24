@@ -1,7 +1,7 @@
 ---
-Version: 1
+Version: 2
 Created: 2026-10-13T20:27:24+00:00
-Updated: 2026-10-13T20:27:24+00:00
+Updated: 2026-10-24T21:52:05+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -76,6 +76,19 @@ Preserve meaningful legacy policy in local companions before replacing native fi
 Preserve an existing operational REVIEW and seeded Claude customizations. Fresh REVIEW
 uses the stable empty seed, never publisher findings. CODE_REVIEW and its companion
 own identifier allocation and Log maintenance; the mutable document does not own policy.
+
+REVIEW is optional repository-owned operational output after initialization. A qualifying
+formal review may automatically maintain only the existing Log under the root router's
+exception, subject to explicit user restrictions, task mode and platform permissions.
+Discovery remains independent of the backlog. An absent or relocated REVIEW is a normal
+opt-out for review execution: complete the review without a warning, search, recreation
+or restoration. Implementation self-review and read-only planning do not maintain it.
+
+The intended long-term lifecycle is seed-and-forget. Current registered `seed_once`
+synchronization is different: it can recreate a missing target and verification can
+reject its absence. That discrepancy belongs to the deferred package-management redesign;
+the declarations and sync engine above are unchanged. Review execution does not invoke
+synchronization to repair optional state.
 
 Whole-file enforced subscription refreshes complete publisher-owned files. Recursive
 expansion only adds or updates members; it does not prune missing members or local files.

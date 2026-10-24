@@ -1,7 +1,7 @@
 ---
-Version: 1
+Version: 2
 Created: 2026-10-13T20:27:25+00:00
-Updated: 2026-10-13T20:27:25+00:00
+Updated: 2026-10-24T21:52:06+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -28,19 +28,28 @@ These instructions apply when planning, creating, changing, reviewing, or diagno
 - Prefer tests that are fast, isolated, repeatable, self-checking, and timely.
 - Write tests as executable specifications of observable behavior and contract expectations.
 - Prefer testing public behavior and observable outcomes over private implementation details.
-- When a test is difficult to write or requires excessive setup, treat that as design feedback about the production code.
+- When a test is difficult to write or requires excessive setup, treat that as design feedback, not proof that encapsulation is defective or must be exposed.
+
+These repository policies use selected unit-of-work and observable-result principles
+from Roy Osherove's *The Art of Unit Testing*. They do not incorporate every book
+recommendation as a universal rule or require reading the book before each task.
 
 ---
 
 ## Test Scope and Failure Discipline
-- Each test should verify one behavior, one rule, one contract, or one failure mode.
-- A test should have one clear reason to fail.
-- Default to one logical assertion per test.
-- Multiple assertions are allowed only when they verify one inseparable outcome and would fail for the same underlying defect.
-- Prefer one Act step per test.
-- If a test starts covering multiple cases, branches, outcomes, or repair paths, split it into separate tests or convert it into a parameterized test.
+- Focus each test on one independently meaningful condition, behavior or use case, expressed by a self-descriptive name and a focused Act phase.
+- A failure should clearly identify the contract or scenario under investigation.
+- Default to one logical assertion; assertion count is a heuristic, not an absolute limit.
+- Multiple assertions may collectively establish one coherent externally observable contract or resulting state when grouping improves clarity or maintainability. They need not fail from the same underlying implementation defect.
+- Prefer one focused Act phase per test.
+- Prefer separate tests when conditions are independently meaningful, separation improves diagnosis, or failures implicate unrelated responsibilities. Use parameterization for variations of the same behavior.
 - Do not add extra assertions "for completeness" when they test separate behavior.
-- If a failure would reasonably require multiple unrelated production fixes, the test is too broad and must be split.
+- Shared setup or a shared public entry point does not justify combining independent outcomes. Favor maintainable test structures over mechanically maximizing test count.
+
+For a file-update operation, separate successful updates, content placement, rollback,
+cancellation and independently contractual performance scenarios. One atomic rollback
+test may inspect several files whose combined state establishes the atomicity invariant.
+Do not combine successful update and rollback merely because they share an entry point.
 
 ---
 
@@ -87,8 +96,14 @@ These instructions apply when planning, creating, changing, reviewing, or diagno
 - Assert the externally relevant outcome, not incidental implementation details.
 - For exceptions, assert the specific exception type and any contract-relevant details when meaningful, such as parameter name.
 - When checking returned state, prefer the smallest assertion set that proves the intended behavior.
-- If verifying several independent properties of one returned object would create multiple reasons to fail, split the test by behavior instead of asserting every property in one method.
+- Split properties that represent independently meaningful behaviors; group observations that jointly prove one coherent resulting state when that improves the test.
 - Avoid assertion groups that bundle unrelated expectations into one test.
+
+When grouping assertions, consider whether they jointly establish one observable contract;
+whether splitting creates independently meaningful, self-descriptive tests or improves
+diagnosis; whether grouping reduces meaningful maintenance duplication without obscuring
+the contract; whether failures implicate unrelated responsibilities; and whether the
+assertions test the API contract rather than internal mechanisms.
 
 ---
 
@@ -132,7 +147,9 @@ These instructions apply when planning, creating, changing, reviewing, or diagno
 ## What Not to Test Directly
 - Do not write tests against private methods directly unless the user explicitly requests white-box tests.
 - Prefer validating private implementation through the public or externally observable behavior that depends on it.
+- A private nested class does not need a separate public test surface. Validate encapsulated behavior through an appropriate observable boundary; do not expand production APIs solely for testing convenience.
 - Do not lock tests to incidental formatting, internal call order, or private data layout unless those are intentional parts of the contract.
+- Do not assert internal buffering, asynchronous mechanisms or helper behavior unless those characteristics are themselves externally relevant contracts.
 
 ---
 
@@ -149,13 +166,13 @@ These instructions apply when planning, creating, changing, reviewing, or diagno
 - If a test fails because of an unrelated existing issue, state that explicitly and continue validating the remaining relevant scope where possible.
 - Do not claim a test is flaky without evidence. Explain the suspected source of non-determinism.
 - If a new or changed test requires unusual setup, explain why simpler alternatives were insufficient.
-- If you intentionally keep multiple assertions in one test, be prepared to explain why they still represent one logical assertion and one reason to fail.
+- If you intentionally group assertions, be prepared to explain their coherent observable contract and the clarity, maintenance and diagnostic trade-offs.
 
 ---
 
 ## Review Priorities for Test Code
 When reviewing or generating tests, prioritize in this order:
-1. Behavioral focus and one clear reason to fail
+1. One independently meaningful condition and precise failure diagnosis
 2. Independence and repeatability
 3. Readability and naming quality
 4. Correctness of assertions and expected outcomes

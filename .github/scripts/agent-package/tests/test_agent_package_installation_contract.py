@@ -16,6 +16,7 @@ from test_agent_package_source_contract import (
     ENGINE, EXCLUSIONS, MODULES, PREFIX, REPOSITORY, SOURCE, common,
     assert_claude_import, execute_sync, local_source_files, normalized, powershell_recipe,
     read_selected, registration, required_command, run_powershell, source_glob, sync_files,
+    ROUTER_REVIEW_RULES, REVIEW_SCENARIOS, assert_policy_clauses,
 )
 
 
@@ -32,9 +33,11 @@ SHARED_GUARDRAILS_RULES = (
 CUSTOM_GUARDRAILS_PATH = '.agent/instructions/custom/GUARDRAILS.md'
 PROTECTED_PATH_AUTHORIZATION = 'The following files are read-only unless the current user request explicitly names and authorizes the exact path:'
 RECOVERY_STATE_AUTHORIZATION = 'Only the maintainer may mark backlog passes complete, update the evidence ledger, or unlock later passes, unless the current prompt explicitly authorizes a coordination-only update to those exact files.'
+ARCHIVE_AUTHORITY = 'Content under `.backup/` is preserved historical material, not automatically relocated active governance.'
+ARCHIVE_BASELINE = 'e7795d905686ef56dbad9400b0da41a2cc5874de'
 CUSTOM_GUARDRAILS_RULES = (
     PROTECTED_PATH_AUTHORIZATION,
-    '* `repository-maintenance-orchestrator-recovery-backlog.md`;',
+    ARCHIVE_AUTHORITY,
     RECOVERY_STATE_AUTHORIZATION,
 )
 
@@ -69,6 +72,23 @@ def assert_enforced_parity(root):
         if entry.lifecycle_policy == 'enforce':
             if (root / entry.target_path).read_bytes() != (REPOSITORY / entry.source_path).read_bytes():
                 raise AssertionError('Installed drift: ' + entry.target_path)
+
+
+def assert_consumer_links(root, absent_optional_claude=False):
+    """Validate all declared links; only the publisher's unselected Claude seed may be absent."""
+    for entry in expanded_projection():
+        path = root / entry.target_path
+        if absent_optional_claude and entry.target_path == 'CLAUDE.md' and not path.exists():
+            if entry.lifecycle_policy != 'seed_once' or entry.source_path != PREFIX + 'bridges/claude/CLAUDE.md':
+                raise AssertionError('Missing adapter is not the optional Claude seed.')
+            continue
+        text = re.sub(r'```.*?```', '', path.read_text(encoding='utf-8'), flags=re.S)
+        for target in re.findall(r'\[[^\]]*\]\(([^)]+)\)', text):
+            if re.match(r'^[a-z]+:', target) or target.startswith('#'):
+                continue
+            target = target.split('#', 1)[0].strip('<>')
+            if not (path.parent / target).exists():
+                raise AssertionError('Missing consumer link: ' + str(path.parent / target))
 
 
 def git(root, *arguments):
@@ -124,7 +144,10 @@ class InstalledContractTests(unittest.TestCase):
         assert_enforced_parity(REPOSITORY)
 
     def test_initial_claude_copy_and_real_import(self):
-        assert_claude_import((REPOSITORY / 'CLAUDE.md').read_bytes())
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); execute_sync(root)
+            assert_claude_import((root / 'CLAUDE.md').read_bytes())
+            self.assertEqual((SOURCE / 'bridges/claude/CLAUDE.md').read_bytes(), (root / 'CLAUDE.md').read_bytes())
 
     def test_only_meaningful_workflows_custom_companions_exist(self):
         directory = REPOSITORY / '.agent/instructions/custom'
@@ -137,17 +160,21 @@ class InstalledContractTests(unittest.TestCase):
     def test_workflows_authority_and_passive_constraints_preserved(self):
         guard = (REPOSITORY / '.agent/instructions/custom/GUARDRAILS.md').read_text(encoding='utf-8')
         implementation = (REPOSITORY / '.agent/instructions/custom/IMPLEMENTATION.md').read_text(encoding='utf-8')
-        for phrase in ('Current user authorization is the only source of write authority',
-                       'Do not begin W2', 'user-prompts/', 'inert user-invoked templates',
-                       'Phase 3 migration', 'maintainer explicitly green-lights', 'Do not activate, initialize, populate, checksum',
-                       'Only the maintainer may mark backlog passes complete'):
-            with self.subTest(phrase=phrase): self.assertIn(phrase, guard)
+        assert_conserved_policy(guard.encode('utf-8'), (
+            'Current user authorization is the only source of write authority',
+            ARCHIVE_AUTHORITY, 'inert user-invoked templates',
+            'Historical W1/W2 statuses, proposed allowlists and execution leases do not establish current execution state or authorize work.',
+            "A qualifying formal review request carries only the canonical router's narrow exception for the existing `.agent/REVIEW.md` Log",
+            'read-only planning and implementation self-review do not qualify',
+            'This correction grants no archive activation, evidence-persistence or recovery-transition authority.',
+            RECOVERY_STATE_AUTHORIZATION,
+        ))
         self.assertIn('self-contained review handoff', implementation)
         self.assertIn('current task explicitly authorizes its path', implementation)
 
     def test_claude_local_preserves_recorded_git_blob_content(self):
         migration = (REPOSITORY / '.github/tools/agent-package/MIGRATION.md').read_text(encoding='utf-8')
-        assert_historical_context_preserved((REPOSITORY / 'CLAUDE.local.md').read_bytes(), migration)
+        assert_historical_context_preserved((REPOSITORY / '.backup/CLAUDE.local.md').read_bytes(), migration)
 
     def test_shared_guardrails_conserve_accepted_governance(self):
         for relative in SHARED_GUARDRAILS_PATHS:
@@ -171,28 +198,82 @@ class InstalledContractTests(unittest.TestCase):
             with self.subTest(phrase=phrase): self.assertIn(phrase, migration)
 
     def test_installed_markdown_links_resolve_in_consumer_namespace(self):
-        for entry in expanded_projection():
-            path = REPOSITORY / entry.target_path
-            text = re.sub(r'```.*?```', '', path.read_text(encoding='utf-8'), flags=re.S)
-            for target in re.findall(r'\[[^\]]*\]\(([^)]+)\)', text):
-                if re.match(r'^[a-z]+:', target) or target.startswith('#'): continue
-                target = target.split('#', 1)[0].strip('<>')
-                with self.subTest(file=entry.target_path, link=target):
-                    self.assertTrue((path.parent / target).exists(), str(path.parent / target))
+        assert_consumer_links(REPOSITORY, absent_optional_claude=True)
 
-    def test_control_plane_current_references_use_new_surfaces(self):
-        backlog = (REPOSITORY / 'repository-maintenance-orchestrator-recovery-backlog.md').read_text(encoding='utf-8')
-        protocol = (REPOSITORY / 'repository-review-protocol.md').read_text(encoding='utf-8')
-        self.assertNotIn('[AGENT_GUARDRAILS.md](AGENT_GUARDRAILS.md)', backlog)
-        self.assertNotIn('[DOCUMENTATION.md](DOCUMENTATION.md)', backlog)
-        self.assertIn('| `AGENT_GUARDRAILS.md` | Repository-specific overlay only. |', backlog)  # Historical allowlist is untouched.
-        for text in (backlog, protocol):
-            self.assertIn('deployment/packages/agent-package/**', text)
-            self.assertIn('.claude/settings.json', text)
-            self.assertIn('.agent/instructions/', text)
+    def test_archived_governance_and_claude_files_preserve_cleanup_baseline(self):
+        paths = git(REPOSITORY, 'ls-tree', '-r', '--name-only', ARCHIVE_BASELINE, '--', '.backup/').decode('utf-8').splitlines()
+        self.assertTrue(paths)
+        for relative in paths:
+            with self.subTest(path=relative):
+                committed = git(REPOSITORY, 'show', ARCHIVE_BASELINE + ':' + relative)
+                self.assertEqual(committed.replace(b'\r\n', b'\n'), (REPOSITORY / relative).read_bytes().replace(b'\r\n', b'\n'))
+        for absent in ('repository-review-protocol.md', 'repository-maintenance-orchestrator-recovery-backlog.md',
+                       'backlog-workflow-documentation.md', 'evidence-ledger-documentation.md',
+                       'claude-code-handoff', 'CLAUDE.md', 'CLAUDE.local.md'):
+            with self.subTest(absent=absent): self.assertFalse((REPOSITORY / absent).exists())
+
+    def test_active_guardrails_do_not_restore_archived_mandatory_routes(self):
+        guard = (REPOSITORY / CUSTOM_GUARDRAILS_PATH).read_text(encoding='utf-8')
+        for obsolete in ('Read `repository-review-protocol.md`', 'Read `backlog-workflow-documentation.md`',
+                         'Read `evidence-ledger-documentation.md`', 'Read `claude-code-handoff/',
+                         '* `repository-maintenance-orchestrator-recovery-backlog.md`;',
+                         '* `repository-review-protocol.md`;'):
+            with self.subTest(obsolete=obsolete): self.assertNotIn(obsolete, guard)
+        assert_conserved_policy(guard.encode('utf-8'), (
+            'must not be mechanically redirected into the archive as active instruction routes',
+            'Read `.agent/instructions/package/GUARDRAILS.md` and this custom GUARDRAILS companion.',
+            'Read every applicable nested `AGENTS.md` and scoped instruction file.',
+            'Do not modify or restore archived files incidentally.',
+        ))
+
+    def test_installed_review_policy_conserves_independent_approved_contracts(self):
+        assert_policy_clauses((REPOSITORY / 'AGENTS.md').read_bytes(), ROUTER_REVIEW_RULES)
+        content = (REPOSITORY / '.agent/instructions/package/CODE_REVIEW.md').read_bytes()
+        for scenario, clauses in REVIEW_SCENARIOS.items():
+            with self.subTest(scenario=scenario): assert_policy_clauses(content, clauses)
 
 
 class SynchronizationWitnessTests(unittest.TestCase):
+    def test_selected_optional_bridges_have_complete_consumer_link_closure(self):
+        for optional in ('claude', 'copilot', 'both'):
+            with self.subTest(optional=optional), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); manifest = registration()
+                if optional != 'both':
+                    removed = 'copilot' if optional == 'claude' else 'claude'
+                    manifest['entries'] = [entry for entry in manifest['entries'] if '/bridges/' + removed + '/' not in entry.get('source_path', '')]
+                execute_sync(root, manifest=manifest)
+                # Use the actual selected entries; unselected adapters are not installed dependencies.
+                with mock.patch(__name__ + '.expanded_projection', return_value=[entry for entry in expanded_projection()
+                        if '/bridges/' not in entry.source_path or optional == 'both' or '/bridges/' + optional + '/' in entry.source_path]):
+                    assert_consumer_links(root)
+
+    def test_consumer_link_validation_rejects_missing_required_dependency(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); execute_sync(root)
+            (root / '.agent/instructions/package/ENGINEERING.md').unlink()
+            with self.assertRaises((AssertionError, FileNotFoundError)):
+                assert_consumer_links(root, absent_optional_claude=True)
+
+    def test_scoped_materialization_preserves_archives_optional_absence_and_local_state(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            protected = {'.backup/CLAUDE.md': b'Historical bridge\r\n',
+                         '.backup/repository-review-protocol.md': b'Historical protocol\n',
+                         '.agent/REVIEW.md': b'# Review\r\n## Log\r\n- [ ] R07 [BUG] Human state\r\n',
+                         'unrelated.txt': b'Unrelated dirty content\n'}
+            for relative, content in protected.items():
+                path = root / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(content)
+            pairs = [(PREFIX + 'instruction-package/instructions/package/' + name + '.md', '.agent/instructions/package/' + name + '.md')
+                     for name in ('CODE_REVIEW', 'TESTING', 'DOTNET', 'DOCUMENTATION', 'GUARDRAILS')]
+            pairs.extend(((PREFIX + 'instruction-package/instructions/package/docs/ARCHITECTURE.md', '.agent/instructions/package/docs/ARCHITECTURE.md'),
+                          (PREFIX + 'AGENTS.md', 'AGENTS.md')))
+            for source, target in pairs:
+                path = root / target; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes((REPOSITORY / source).read_bytes())
+                self.assertEqual((REPOSITORY / source).read_bytes(), path.read_bytes())
+            self.assertEqual(protected, {relative: (root / relative).read_bytes() for relative in protected})
+            self.assertFalse((root / 'CLAUDE.md').exists())
+            self.assertFalse((root / 'CLAUDE.local.md').exists())
+
     def test_fresh_consumer_gets_all_dependencies_and_verifies(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -401,6 +482,18 @@ class HistoricalContextWitnessTests(unittest.TestCase):
 
 
 class PolicyConservationWitnessTests(unittest.TestCase):
+    def test_review_safeguard_loss_from_both_source_and_installed_policy_is_rejected(self):
+        paths = (PREFIX + 'instruction-package/instructions/package/CODE_REVIEW.md', '.agent/instructions/package/CODE_REVIEW.md')
+        clauses = tuple(clause for name in ('checkbox_authority', 'missing_optional_log', 'obsolete_unchecked', 'independent_discovery')
+                        for clause in REVIEW_SCENARIOS[name])
+        for clause in clauses:
+            for relative in paths:
+                with self.subTest(clause=clause, path=relative):
+                    text = ' '.join((REPOSITORY / relative).read_text(encoding='utf-8').split())
+                    damaged = text.replace(' '.join(clause.split()), '', 1).encode('utf-8')
+                    with self.assertRaisesRegex(AssertionError, 'Missing approved policy'):
+                        assert_policy_clauses(damaged, clauses)
+
     def test_worktree_protection_loss_in_both_shared_copies_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -417,9 +510,10 @@ class PolicyConservationWitnessTests(unittest.TestCase):
             destination = Path(temporary) / CUSTOM_GUARDRAILS_PATH
             destination.parent.mkdir(parents=True)
             original = (REPOSITORY / CUSTOM_GUARDRAILS_PATH).read_bytes()
-            for rule in (PROTECTED_PATH_AUTHORIZATION, RECOVERY_STATE_AUTHORIZATION):
+            for rule in (PROTECTED_PATH_AUTHORIZATION, RECOVERY_STATE_AUTHORIZATION, ARCHIVE_AUTHORITY):
                 with self.subTest(rule=rule):
-                    destination.write_bytes(original.replace(rule.encode('utf-8'), b''))
+                    text = ' '.join(original.decode('utf-8').split())
+                    destination.write_bytes(text.replace(' '.join(rule.split()), '', 1).encode('utf-8'))
                     with self.assertRaisesRegex(AssertionError, 'Missing conserved policy'):
                         assert_conserved_policy(destination.read_bytes(), CUSTOM_GUARDRAILS_RULES)
 

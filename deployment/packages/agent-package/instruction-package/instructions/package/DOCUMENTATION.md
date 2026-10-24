@@ -1,7 +1,7 @@
 ---
-Version: 1
+Version: 2
 Created: 2026-10-13T20:27:24+00:00
-Updated: 2026-10-13T20:27:24+00:00
+Updated: 2026-10-24T21:52:05+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -25,8 +25,7 @@ Read for documentation, comments, examples, instruction Markdown, or behavior ch
 - Add meaningful code comments where names alone are not enough to explain intent, invariants, trade-offs, caveats, failure modes, unsupported scenarios, or non-obvious behavior.
 - Prefer improving structure and naming before adding explanatory comments that compensate for avoidably unclear code.
 - Do not add comments that merely restate the code.
-- Use XML or language-native API documentation comments for public or externally consumed APIs when the repository already uses them, or when you introduce or significantly change public surface area.
-- Use proper XML documentation tags and language-aware markup such as `<see cref="..."/>` and `<see langword="null"/>` where appropriate.
+- Use language-native API documentation comments for public or externally consumed APIs when the repository already uses them, or when you introduce or significantly change public surface area.
 - Use correct documentation syntax and language-aware markup where supported.
 - If a change introduces non-obvious API usage, data structures, workflow expectations, or extension points, add or update a small Markdown document in the repository's preferred documentation location as described in the [File System and Project Structure](ENGINEERING.md#file-system-and-project-structure) section.
 - Keep documentation aligned with implemented behavior; stale documentation is a defect.
@@ -44,7 +43,7 @@ Documentation is part of the implementation. When behavior, public surface, or i
 Use the smallest documentation layer that fully explains the change:
 
 1. **Source comments** for non-obvious implementation intent.
-2. **XML documentation comments** for API surface.
+2. **Language-native API documentation** for API surface.
 3. **Markdown documentation** for consumer guidance, data structures, workflows, behavior notes, and examples. Follow the established documentation layout; otherwise use the top-level `docs/` directory in the repository root. You can create a subfolder if appropriate. Governance instructions, local configuration, and agent bridges keep their established root, `.agent/`, and `.github/` locations.
 
 Do not push everything into one layer.
@@ -52,7 +51,7 @@ Do not push everything into one layer.
 ---
 
 ## 1) Source comments inside code
-Use regular `//` comments deliberately and only when the code would otherwise hide important intent.
+Use the language-native source-comment syntax deliberately and only when the code would otherwise hide important intent.
 
 Add source comments for:
 - design rationale,
@@ -68,28 +67,8 @@ Add source comments for:
 
 Do **not** add comments that merely narrate obvious syntax or restate a good symbol name.
 
-Bad:
-```csharp
-// Checks if the sequence is empty.
-if (!items.Any())
-{
-    ...
-}
-```
-
-Good:
-```csharp
-// Materialize once because upstream enumeration is stateful and may read from a forward-only FIT stream.
-var records = source.ToList();
-```
-
-Good:
-```csharp
-// Keep the original field order because downstream CSV consumers compare columns positionally.
-```
-
 Comment style:
-- Prefer single-line `//` comments over block comments.
+- Follow the language and repository comment-style conventions.
 - Place the comment on its own line above the relevant code.
 - Start with an uppercase letter.
 - Keep comments concise but meaningful.
@@ -97,81 +76,28 @@ Comment style:
 
 Use `TODO`, `HACK`, or similar markers only when necessary, and include concrete context.
 
-Better:
-```csharp
-// TODO: Preserve developer field units once the SDK decoder exposes the original scale metadata.
-```
-
-Worse:
-```csharp
-// TODO: Fix this.
-```
-
 ---
 
-## 2) XML documentation comments for APIs
-Use XML documentation comments for public types and public members at a minimum. Also document protected or extension-oriented members when callers are expected to depend on them.
+## 2) Language-native API documentation
+Document public and externally consumed APIs using the language-native documentation
+conventions, including protected or extension-oriented members on which callers depend.
+Update documentation for new APIs and changes to public behavior, nullability, exceptions,
+units, ordering guarantees or mutation semantics.
 
-When XML docs are required:
-- new public classes, records, structs, interfaces, enums, and delegates,
-- new public constructors, methods, properties, events, and fields,
-- changed public behavior,
-- changed nullability, exception behavior, units, ordering guarantees, or mutation semantics.
+Use meaningful summaries and complete sentences. Explain non-trivial parameters, return
+values, meaningful exceptions, invariants and caveats. Include examples when they materially
+help callers; document performance, mutability, threading and format constraints when relevant.
+Use language-aware references and markup where supported, following repository conventions.
+Applicable .NET XML syntax and requirements belong in [DOTNET](DOTNET.md#documentation-expectations).
 
-Minimum XML documentation quality:
-- Every documented API should have a clear `<summary>`.
-- Use complete sentences.
-- Document each parameter with `<param>` when parameters are non-trivial or behavior depends on them.
-- Use `<returns>` for methods and properties where the return meaning is not already obvious.
-- Use `<exception>` for meaningful documented exceptions.
-- Use `<remarks>` for caveats, ordering guarantees, performance notes, mutability, threading, or format constraints.
-- Use `<example>` when a short usage snippet materially helps consumers.
-
-Prefer semantic XML tags over plain text:
-- Use `<see cref="T:Namespace.TypeName"/>` or `<see cref="MemberName"/>` for code references.
-- Use `<paramref name="value"/>` for parameter references.
-- Use `<typeparamref name="T"/>` for generic type parameters.
-- Use `<c>` for inline code and `<code>` for multi-line code.
-- Use `<see langword="null"/>`, `<see langword="true"/>`, and similar language keywords instead of quoted plain text where appropriate.
-
-Examples:
-
-```csharp
-/// <summary>
-/// Tries to locate the session message that best represents the completed activity.
-/// </summary>
-/// <param name="messages">The decoded FIT messages in source order.</param>
-/// <returns>
-/// The selected session message, or <see langword="null"/> when the FIT file does not contain session data.
-/// </returns>
-/// <remarks>
-/// When multiple session messages are present, the implementation currently prefers the last complete message.
-/// This matches Garmin export behavior observed in the repository test data but may require revision for multi-sport activities.
-/// </remarks>
-public static SessionMesg? TryGetPrimarySession(IReadOnlyList<Mesg> messages)
-```
-
-```csharp
-/// <summary>
-/// Gets the average speed in meters per second.
-/// </summary>
-/// <remarks>
-/// The value is the decoded FIT session field value before any user-facing unit conversion.
-/// </remarks>
-public double AverageSpeedMetersPerSecond { get; }
-```
-
-Avoid weak summaries such as:
-- “Gets or sets the value.”
-- “Initializes a new instance.” without saying what the type represents.
-- “Does processing.”
-
-If the repository enables XML documentation file generation, keep public XML docs warning-free.
+Avoid weak summaries such as "Gets or sets the value", "Initializes a new instance" without
+explaining the type, or "Does processing". Keep documentation diagnostics warning-free when
+the repository enables them.
 
 ---
 
 ## 3) Markdown documentation files
-Add or update a small Markdown document when code comments and XML comments are not enough for a consumer or maintainer to understand how to use the API or data model.
+Add or update a small Markdown document when source comments and native API documentation are not enough for a consumer or maintainer to understand how to use the API or data model.
 
 Typical triggers:
 - a new library surface,
@@ -216,7 +142,7 @@ Suggested outline:
 ## Choosing the right level
 Use this rule of thumb:
 - **Would a maintainer misunderstand why the code looks this way?** Add a source comment.
-- **Would a caller misunderstand how to use the API?** Add or update XML docs.
+- **Would a caller misunderstand how to use the API?** Add or update language-native API documentation.
 - **Would a consumer need a bigger-picture explanation or example?** Add or update Markdown docs.
 
 Often the correct answer is more than one layer.
@@ -228,7 +154,7 @@ For implementation tasks, documentation is part of done when relevant.
 
 Before finishing, verify:
 - comments explain non-obvious intent rather than narrate syntax,
-- public APIs changed by the task have appropriate XML docs,
-- `null`, `true`, `false`, and code symbols use semantic XML markup where appropriate,
+- public APIs changed by the task have appropriate language-native documentation,
+- keywords and code symbols use language-aware references and markup where supported,
 - Markdown docs are updated when consumers need examples or data-model explanation,
 - and no stale comments remain that contradict the implementation.

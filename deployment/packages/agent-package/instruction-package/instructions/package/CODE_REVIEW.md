@@ -1,7 +1,7 @@
 ---
-Version: 1
+Version: 3
 Created: 2026-10-13T20:27:24+00:00
-Updated: 2026-10-13T20:27:24+00:00
+Updated: 2026-10-24T21:55:32+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -19,7 +19,7 @@ Author: BionicCode
 
 # Code review instructions
 
-Read before beginning a code review, including the exact `<review>` prompt. Analysis or design feedback without a code-review request does not invoke this workflow. Implementation self-review does not invoke backlog maintenance. Load the other domain and task instructions selected by the root router as well.
+Read before a user-requested formal review, including the exact `<review>` prompt and appropriately scoped reviews of code, tests, documentation or instruction implementations. Ordinary advisory analysis, architectural discussion, implementation self-review and read-only planning do not qualify for operational backlog maintenance. Reading this module as planning or audit data does not activate that maintenance. Load the other domain and task instructions selected by the root router as well.
 
 ## Code Review Rules
 Goal: perform a deep, evidence-based code review focused on correctness, behavioral risk, contract mismatches, and maintainability.
@@ -55,10 +55,12 @@ Prioritize findings in this order:
 
 Organize the review by file.
 
-Each actionable finding must have a backlog-stable identifier of the form `RNN`,
+Each actionable finding must have an identifier of the form `RNN`,
 where `NN` is a decimal sequence number padded to at least two digits
-(`R01`, `R02`, …, `R99`, `R100`, …). A new backlog begins with `R01`;
-an active backlog continues according to the Review Backlog rules below. Place the identifier before the primary category tag.
+(`R01`, `R02`, …, `R99`, `R100`, …). Persisted identifiers are stable within the
+current backlog; a new backlog begins with `R01`. Without permitted persistence,
+use sequential report-local identifiers beginning with `R01`, clearly labelled as
+unreserved; do not claim cross-review stability. Place the identifier before the primary category tag.
 
 For each file:
 - Use a file header with the filename.
@@ -98,38 +100,96 @@ Include these sections in this order:
 
 ### Review Backlog
 
-After completing a code review and determining all findings, read [`.agent/REVIEW.md`](../../REVIEW.md) and reconcile the review identifiers with its `Log` before producing the final review response.
+Complete independent finding discovery before consulting the existing Log. Do not use
+backlog entries to guide, constrain or validate review scope, severity, discovery or
+completeness. Only then reconcile eligible findings and scope-relevant status changes.
 
-- Do not consult `REVIEW.md` when determining review scope, findings, severity, or completeness.
-- Use the same `RNN` identifier for a finding in both the review report and `REVIEW.md`.
-- If a current finding matches an existing unchecked backlog entry, preserve and reuse that entry's identifier.
-- Assign identifiers for new findings according to the allocation rules in this effective CODE_REVIEW module and its matching custom companion.
-- Never change an existing backlog identifier merely to make numbering continuous.
-- References such as `R03` refer to the current state of `REVIEW.md` unless the user explicitly identifies an earlier review or report.
-- After identifier reconciliation, update the `Log` according to the maintenance rules in this effective CODE_REVIEW module and its matching custom companion.
-- If `REVIEW.md` is unavailable, the review report remains valid independently: assign current findings consecutively beginning with `R01` and report that the backlog could not be updated.
-- The normal final response must still follow the complete review-output contract above.
-- During implementation tasks, do not read, use, or modify `REVIEW.md` unless the user explicitly requests it.
+The root router permits qualifying formal reviews to maintain only the Log section of
+the existing [`.agent/REVIEW.md`](../../REVIEW.md), without separate approval for each
+permitted update. Higher-priority instructions, task mode, platform permissions and
+explicit user restrictions remain binding. Explicitly requested read-only review
+suppresses maintenance. Supporting documents can explain an operation but cannot grant
+additional writable files through references.
+
+If the expected file is absent or relocated, complete the review normally and skip all
+backlog maintenance. Do not search for, create, recreate, restore or relocate it. Missing
+optional state is not a review failure and needs no warning. Use report-local identifiers
+when the Log is absent or persistence is prohibited; these identifiers are not reserved.
+
+An existing unreadable file or a missing, malformed or ambiguous Log boundary remains
+untouched. Report a concise maintenance limitation when relevant; the review remains
+valid with report-local identifiers. A safely identifiable Log has one `## Log` heading and ends at the next level-two
+heading or EOF. Preserve the introduction and all content outside that section.
+
+When maintenance is permitted, use the same identifier in the report and Log. Qualify
+references to earlier backlogs or report-local identifiers rather than assuming all
+`RNN` references denote current persistent state. The normal final response must still
+follow the complete review-output contract above. During implementation tasks, do not
+read, use or modify `REVIEW.md` unless the user explicitly requests it.
 
 ## Operational backlog policy
 
-Each actionable Log finding is a Markdown checkbox item with a backlog-stable `RNN` identifier (decimal padded to at least two digits), its primary review category and source location when available. Explanatory continuation lines may follow. The repository-owned document points to this policy; it is not a separate rule authority.
+### Eligibility
 
-The reviewing agent maintains the backlog as follows:
+Only independently trackable work or decisions with a meaningful open-to-completed
+transition qualify for the Log. Examples include a concrete correction, a missing
+contractual test or a specifically actionable verification task. A category label or
+uncertainty alone is insufficient. Observations, speculative concerns and conceptual
+alternatives remain report content unless independently actionable. Do not manufacture
+tasks to populate the Log.
 
-- Update `REVIEW.md` only after completing the code review. Do not use existing backlog entries to guide, constrain, or validate the review itself.
-- The `Log` contains only actionable findings from code reviews.
-- The user's checkbox state is authoritative. Never infer completion from the current code.
-- If at least one unchecked item exists, the current backlog remains active.
-- For an active backlog, determine the next identifier before removing checked entries. Use one greater than the greatest valid numeric `RNN` identifier currently present anywhere in the `Log`, including checked entries.
-- Before appending new findings, remove all checked entries.
-- Preserve unchecked entries and any user-added notes unchanged, except when an
-  identifier must be repaired under the malformed, missing, or duplicate
-  identifier rule below.
-- Never renumber existing findings to close gaps, and never deliberately reuse an identifier within the current backlog.
-- If a current review finding matches an existing unchecked backlog item, preserve that item's identifier rather than creating a duplicate.
-- Append only new, non-duplicate findings and assign their identifiers consecutively from the next available number.
-- If no unchecked entries remain, start a new backlog: replace the `Log` with the current review findings and assign identifiers consecutively beginning with `R01`.
-- If the current review has no actionable findings and no unchecked entries remain, leave the `Log` empty.
-- If malformed, missing, or duplicate identifiers are encountered, preserve valid unique identifiers where possible and assign replacement or new identifiers above the greatest valid identifier currently present. Do not renumber unaffected items merely to restore continuity.
-- Preserve this introduction and all content outside the `Log`.
+Each tracked finding uses an ordinary Markdown task-list item with an `RNN` identifier,
+one primary category and a source location when available. Continuation lines may carry
+explanations and reviewer annotations. The mutable document is not a policy authority.
+
+### Identifiers and lifecycle
+
+- The user's checkbox state is authoritative. Never automatically check or uncheck an existing item, or infer completion from changed code.
+- If at least one unchecked item exists, the current backlog remains active, including an unchecked item annotated OBSOLETE.
+- Retain checked entries while the backlog remains active so their identifiers remain reserved.
+- Allocate new identifiers above the greatest retained valid numeric identifier, including checked entries, in final report order.
+- Preserve matching existing unchecked identifiers when valid and unique; do not duplicate the finding.
+- Append only new actionable findings as unchecked task-list items; do not duplicate existing tracked work.
+- Never renumber existing findings to close gaps or deliberately reuse an identifier within an active backlog.
+- Repair missing, malformed or conflicting identifiers only on entries already being reconciled for current actionable findings or meaningful status changes, as part of an otherwise necessary eligible Log update. Preserve valid unique identifiers; allocate necessary replacements above the greatest reserved number. Do not perform unrelated identifier cleanup; disclose unresolved reference ambiguity.
+- Evidence contradicting a checked finding does not authorize unchecking it. Track genuinely new corrective work separately when warranted.
+- If there are no new actionable findings or meaningful status updates, leave the Log unchanged, including all-checked history. Do not perform cosmetic rewrites or identifier cleanup.
+- An annotation-only review does not trigger reset. Start a new backlog at `R01` only when genuinely new actionable work arrives and no unchecked entries remain.
+- During reset, retire only completed finding records and preserve user notes. If removal would lose or rewrite notes or their necessary context, defer reset, retain history and allocate above the retained maximum; explain the deferred reset in the report.
+- Identifier stability relies on retained state within a backlog, not global numbering across intentional resets. Do not introduce a separate allocator, counter or state database.
+
+### Evidence-supported annotations
+
+Consider only existing entries implicated by the current review scope and evidence.
+The reviewing agent may independently annotate a finding as OBSOLETE when its contract, feature,
+component or assumption was removed or superseded. Explain the conclusion with enough
+evidence for the maintainer to assess it; do not delete the original finding or change
+its checkbox. Use ordinary task-list syntax and an explicit continuation annotation:
+
+```markdown
+- [ ] R02 [BUG] — Incorrect validation of a retired API.
+  - **Review status: OBSOLETE** — The API was removed and its contract no longer exists; <evidence>.
+```
+
+An apparently corrected defect is not thereby obsolete. Failed reproduction alone
+proves neither resolution nor obsolescence. Explain incomplete or contradictory evidence;
+use REVALIDATION NEEDED only when targeted further verification is warranted. Explain
+resolution and non-reproduction assessments in the report or a necessary reviewer
+evidence note. These annotations do not introduce additional lifecycle states.
+
+Maintain one current reviewer-status annotation where practical. Update reviewer-maintained
+annotation content only when meaningful new evidence warrants it; preserve original finding
+text and user notes. If authorship or boundaries are ambiguous, preserve existing text and
+add a clearly identified corrective note once instead of overwriting human content. Do not
+use strikethrough as the primary status or special characters before the checkbox.
+
+An unchecked OBSOLETE item remains active until the maintainer changes its checkbox.
+Obsolescence is not completion and never independently causes deletion, pruning or reset.
+
+### Idempotence and preservation
+
+Repeated reviews with unchanged evidence must not duplicate findings or annotations,
+add timestamps, rewrite unchanged annotations or change checkboxes. Apply only necessary
+eligible changes within the Log. Before editing, confirm the Log still matches the version
+used for reconciliation. If it changed concurrently, reconcile against fresh content or
+leave it untouched and report the limitation; never overwrite intervening user notes.
