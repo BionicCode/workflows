@@ -152,14 +152,13 @@ class InstalledContractTests(unittest.TestCase):
     def test_only_meaningful_workflows_custom_companions_exist(self):
         directory = REPOSITORY / '.agent/instructions/custom'
         actual = {path.name for path in directory.iterdir() if path.is_file()}
-        self.assertTrue({'ENGINEERING.md', 'IMPLEMENTATION.md', 'TESTING.md', 'GUARDRAILS.md', 'DOCUMENTATION.md'}.issubset(actual))
+        self.assertTrue({'ENGINEERING.md', 'TESTING.md', 'GUARDRAILS.md', 'DOCUMENTATION.md'}.issubset(actual))
         self.assertTrue(actual.issubset({name + '.md' for name in MODULES}))
         for path in directory.glob('*.md'):
             with self.subTest(path=path): self.assertNotIn('<fill me>', path.read_text(encoding='utf-8'))
 
     def test_workflows_authority_and_passive_constraints_preserved(self):
         guard = (REPOSITORY / '.agent/instructions/custom/GUARDRAILS.md').read_text(encoding='utf-8')
-        implementation = (REPOSITORY / '.agent/instructions/custom/IMPLEMENTATION.md').read_text(encoding='utf-8')
         assert_conserved_policy(guard.encode('utf-8'), (
             'Current user authorization is the only source of write authority',
             ARCHIVE_AUTHORITY, 'inert user-invoked templates',
@@ -169,8 +168,23 @@ class InstalledContractTests(unittest.TestCase):
             'This correction grants no archive activation, evidence-persistence or recovery-transition authority.',
             RECOVERY_STATE_AUTHORIZATION,
         ))
-        self.assertIn('self-contained review handoff', implementation)
-        self.assertIn('current task explicitly authorizes its path', implementation)
+
+    def test_general_implementation_owns_ordinary_completion_reporting(self):
+        rules = (
+            'perform a separate self-review of the complete diff against the task goal, repository contracts, and acceptance criteria.',
+            'For every implementation task, finish with a concise Markdown report that can stand alone as a handoff without requiring the full task transcript.',
+            'Provide the report inline in the final response by default.',
+            'Create a separate Markdown report file only when the user explicitly requests one',
+            '### Files Changed', '### Validation', '### Tests and Documentation',
+            '### Plan Deviations and Assumptions', '### Self-Review',
+            '### Remaining Risks and Unverified Items',
+        )
+        for relative in (PREFIX + 'instruction-package/instructions/package/IMPLEMENTATION.md',
+                         '.agent/instructions/package/IMPLEMENTATION.md'):
+            with self.subTest(path=relative):
+                content = (REPOSITORY / relative).read_bytes()
+                assert_conserved_policy(content, rules)
+                self.assertNotIn(b'repository-maintenance-orchestrator-recovery-backlog.md', content)
 
     def test_claude_local_preserves_recorded_git_blob_content(self):
         migration = (REPOSITORY / '.github/tools/agent-package/MIGRATION.md').read_text(encoding='utf-8')
@@ -386,10 +400,13 @@ class SynchronizationWitnessTests(unittest.TestCase):
                 '.agent/instructions/package/DOCUMENTATION.md', 'deployment/packages/agent-package/AGENTS.override.md'],
                 [path.relative_to(root).as_posix() for path in paths])
 
-    def test_absent_optional_custom_is_normal(self):
+    def test_all_modules_resolve_without_optional_custom_or_backlog_workspace(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); execute_sync(root)
-            self.assertEqual(2, len(read_selected(root, ('ENGINEERING', 'DOTNET'))))
+            self.assertEqual(
+                ['.agent/instructions/package/' + name + '.md' for name in MODULES],
+                [path.relative_to(root).as_posix() for path in read_selected(root, MODULES)])
+            self.assertFalse((root / 'project-backlog').exists())
 
     def test_illegal_path_traversal_registration_fails_before_writes(self):
         with tempfile.TemporaryDirectory() as temporary:
