@@ -139,6 +139,18 @@ def metadata_fixture(root):
     return installed, copilot
 
 
+def custom_metadata_fixture(root):
+    metadata_fixture(root)
+    companions = []
+    for name in ('ENGINEERING', 'TESTING', 'GUARDRAILS', 'DOCUMENTATION'):
+        relative = '.agent/instructions/custom/' + name + '.md'
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(strip_managed_metadata((REPOSITORY / relative).read_bytes()))
+        companions.append(path)
+    return companions
+
+
 class InstalledContractTests(unittest.TestCase):
     def test_all_enforced_installed_bytes_match_finalized_sources(self):
         assert_enforced_parity(REPOSITORY)
@@ -416,6 +428,33 @@ class SynchronizationWitnessTests(unittest.TestCase):
 
 
 class ExplicitMetadataWitnessTests(unittest.TestCase):
+    def test_custom_metadata_recipe_updates_only_existing_companions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); companions = custom_metadata_fixture(root)
+            before = {path: path.read_bytes() for path in root.rglob('*') if path.is_file()}
+            result = run_powershell(root, "$env:GIT_OPTIONAL_LOCKS = '0'\n" + powershell_recipe('custom-metadata-update'))
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            after = {path: path.read_bytes() for path in root.rglob('*')
+                     if path.is_file() and path != root / 'acceptance-recipe.ps1'}
+            self.assertEqual(set(companions), {path for path in before.keys() | after.keys()
+                                              if before.get(path) != after.get(path)})
+            for path in companions:
+                with self.subTest(path=path):
+                    self.assertRegex(after[path].decode('utf-8'), r'(?m)^Version: 1$')
+                    self.assertEqual(before[path], strip_managed_metadata(after[path]))
+            self.assertFalse((root / '.agent/instructions/custom/IMPLEMENTATION.md').exists())
+
+    def test_custom_metadata_recipe_rejects_missing_required_path_before_writes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); companions = custom_metadata_fixture(root)
+            missing = companions[-1]; missing.unlink()
+            before = {path: path.read_bytes() for path in root.rglob('*') if path.is_file()}
+            result = run_powershell(root, "$env:GIT_OPTIONAL_LOCKS = '0'\n" + powershell_recipe('custom-metadata-update'))
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn('Invalid custom path: ' + missing.relative_to(root).as_posix(), result.stdout + result.stderr)
+            self.assertEqual(before, {path: path.read_bytes() for path in root.rglob('*')
+                                      if path.is_file() and path != root / 'acceptance-recipe.ps1'})
+
     def test_final_owned_metadata_passes_existing_checker_in_disposable_fixture(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); git(root, 'init', '--quiet')

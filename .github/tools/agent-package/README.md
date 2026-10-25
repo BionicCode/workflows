@@ -1,7 +1,7 @@
 ---
-Version: 1
+Version: 2
 Created: 2026-10-13T20:27:23+00:00
-Updated: 2026-10-13T20:27:23+00:00
+Updated: 2026-10-25T14:25:09+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -154,7 +154,6 @@ no empty CODE_REVIEW or DOTNET companions in this installation.
 ```powershell
 [string[]] $metadataPaths = @(
     '.agent/instructions/custom/ENGINEERING.md'
-    '.agent/instructions/custom/IMPLEMENTATION.md'
     '.agent/instructions/custom/TESTING.md'
     '.agent/instructions/custom/GUARDRAILS.md'
     '.agent/instructions/custom/DOCUMENTATION.md'
