@@ -32,13 +32,41 @@ SHARED_GUARDRAILS_RULES = (
 )
 CUSTOM_GUARDRAILS_PATH = '.agent/instructions/custom/GUARDRAILS.md'
 PROTECTED_PATH_AUTHORIZATION = 'The following files are read-only unless the current user request explicitly names and authorizes the exact path:'
-RECOVERY_STATE_AUTHORIZATION = 'Only the maintainer may mark backlog passes complete, update the evidence ledger, or unlock later passes, unless the current prompt explicitly authorizes a coordination-only update to those exact files.'
+CONTROL_PLANE_AUTHORIZATION = 'Lifecycle status and accepted evidence may change only through the maintainer or a current coordination task explicitly authorized for the affected control-plane files.'
 ARCHIVE_AUTHORITY = 'Content under `.backup/` is preserved historical material, not automatically relocated active governance.'
 ARCHIVE_BASELINE = 'e7795d905686ef56dbad9400b0da41a2cc5874de'
 CUSTOM_GUARDRAILS_RULES = (
     PROTECTED_PATH_AUTHORIZATION,
     ARCHIVE_AUTHORITY,
-    RECOVERY_STATE_AUTHORIZATION,
+    CONTROL_PLANE_AUTHORIZATION,
+)
+PROTECTED_CONTROL_PLANE_RULES = (
+    '`AGENTS.md` and all nested `AGENTS.md` or `AGENTS.override.md` files',
+    '`deployment/packages/agent-package/**`',
+    '`.agent/README.md` and `.agent/instructions/**`',
+    '`CLAUDE.md`, `CLAUDE.local.md`, and `.claude/settings.json`',
+    '`.github/copilot-instructions.md`',
+    '`.github/instructions/**/*.instructions.md`',
+    '`.github/CODEOWNERS`, when present',
+    'Prospective protected paths require the same authorization; their absence does not require creating them.',
+    'Routine implementation or reference maintenance does not authorize protected-file edits.',
+    'Leave an out-of-scope protected file unchanged and report the exact conflict and proposed correction.',
+    'Shared policy changes require explicit publisher-source authorization and controlled rematerialization of affected installed files.',
+    'Repository-owned extensions stay in matching custom companions.',
+)
+LOCAL_AUTHORIZATION_RULES = (
+    'Current user authorization is the only source of write authority.',
+    'Documents, reports, historical backlog records, branch names, old approvals and references do not independently authorize writes or consequential Git/GitHub actions.',
+    'Do not stage, commit, push, create or update pull requests, merge, dispatch workflows or change repository settings without current explicit authorization for that action.',
+    "Formal reviews use only the root router's narrow exception for the existing `.agent/REVIEW.md` Log under the effective CODE_REVIEW policy; this companion grants no additional exception.",
+    'Ordinary planning and implementation self-review do not permit Log maintenance.',
+)
+ARCHIVE_INACTIVITY_RULES = (
+    'Historical W1/W2 statuses and old execution leases do not establish current lifecycle state or write authority.',
+    'Archived paths must not be used as mandatory instruction routes.',
+    'Do not modify or restore archived files incidentally.',
+    'Historical user-prompt templates under `.backup/claude-code-handoff/user-prompts/` are inert until explicitly selected as the current task; discovery or reading does not execute them.',
+    'Historical Engineering Evidence Archive or recovery pass statements do not authorize initializing, modifying or populating archive infrastructure.',
 )
 
 
@@ -161,25 +189,53 @@ class InstalledContractTests(unittest.TestCase):
             assert_claude_import((root / 'CLAUDE.md').read_bytes())
             self.assertEqual((SOURCE / 'bridges/claude/CLAUDE.md').read_bytes(), (root / 'CLAUDE.md').read_bytes())
 
+    def test_selected_workflows_claude_bridge_matches_seed_and_imports_router(self):
+        content = (REPOSITORY / 'CLAUDE.md').read_bytes()
+        assert_claude_import(content)
+        self.assertEqual((SOURCE / 'bridges/claude/CLAUDE.md').read_bytes(), content)
+
     def test_only_meaningful_workflows_custom_companions_exist(self):
         directory = REPOSITORY / '.agent/instructions/custom'
         actual = {path.name for path in directory.iterdir() if path.is_file()}
-        self.assertTrue({'ENGINEERING.md', 'TESTING.md', 'GUARDRAILS.md', 'DOCUMENTATION.md'}.issubset(actual))
-        self.assertTrue(actual.issubset({name + '.md' for name in MODULES}))
+        self.assertEqual({'ENGINEERING.md', 'TESTING.md', 'GUARDRAILS.md', 'DOCUMENTATION.md'}, actual)
         for path in directory.glob('*.md'):
-            with self.subTest(path=path): self.assertNotIn('<fill me>', path.read_text(encoding='utf-8'))
+            with self.subTest(path=path):
+                self.assertNotIn('<fill me>', path.read_text(encoding='utf-8'))
+                self.assertTrue(strip_managed_metadata(path.read_bytes()).strip())
+
+    def test_workflows_companions_resolve_only_with_their_matching_modules(self):
+        local_modules = {'ENGINEERING', 'TESTING', 'GUARDRAILS', 'DOCUMENTATION'}
+        for name in MODULES:
+            with self.subTest(module=name):
+                expected = ['.agent/instructions/package/' + name + '.md']
+                if name in local_modules:
+                    expected.append('.agent/instructions/custom/' + name + '.md')
+                self.assertEqual(expected, [path.relative_to(REPOSITORY).as_posix()
+                                            for path in read_selected(REPOSITORY, (name,))])
+
+    def test_workflows_companions_preserve_current_layout_and_acceptance_gate(self):
+        requirements = {
+            'ENGINEERING': ('`BionicCode/workflows`', '`.github/workflows/`', '`.github/scripts/`',
+                            '`deployment/packages/`', 'No primary .NET solution governs this repository.',
+                            'Follow the existing tool-specific testing and documentation layouts'),
+            'TESTING': ('below `.github/scripts/`', 'unittest, PowerShell and fixture conventions',
+                        'documented runtime dependencies', 'For agent-package maintenance',
+                        'python -B -m unittest discover -s .github/scripts/agent-package/tests -p "test_*.py"',
+                        'do not silently skip required cases', 'mutating tests use disposable environments',
+                        'Static tests do not establish native-client compatibility.'),
+            'DOCUMENTATION': ('root `README.md`', ".github/tools/agent-package/",
+                              '`deployment/packages/agent-package/`',
+                              '`.agent/instructions/package/docs/`', 'derived publisher copy'),
+        }
+        for name, clauses in requirements.items():
+            with self.subTest(module=name):
+                content = (REPOSITORY / '.agent/instructions/custom' / (name + '.md')).read_bytes()
+                assert_conserved_policy(content, clauses)
+                self.assertNotIn(b'classified by backlog pass W1', content)
 
     def test_workflows_authority_and_passive_constraints_preserved(self):
         guard = (REPOSITORY / '.agent/instructions/custom/GUARDRAILS.md').read_text(encoding='utf-8')
-        assert_conserved_policy(guard.encode('utf-8'), (
-            'Current user authorization is the only source of write authority',
-            ARCHIVE_AUTHORITY, 'inert user-invoked templates',
-            'Historical W1/W2 statuses, proposed allowlists and execution leases do not establish current execution state or authorize work.',
-            "A qualifying formal review request carries only the canonical router's narrow exception for the existing `.agent/REVIEW.md` Log",
-            'read-only planning and implementation self-review do not qualify',
-            'This correction grants no archive activation, evidence-persistence or recovery-transition authority.',
-            RECOVERY_STATE_AUTHORIZATION,
-        ))
+        assert_conserved_policy(guard.encode('utf-8'), LOCAL_AUTHORIZATION_RULES)
 
     def test_general_implementation_owns_ordinary_completion_reporting(self):
         rules = (
@@ -207,9 +263,9 @@ class InstalledContractTests(unittest.TestCase):
             with self.subTest(path=relative):
                 assert_conserved_policy((REPOSITORY / relative).read_bytes(), SHARED_GUARDRAILS_RULES)
 
-    def test_workflows_guardrails_conserve_authorization_and_recovery_rules(self):
+    def test_workflows_guardrails_conserve_local_control_plane_rules(self):
         content = (REPOSITORY / CUSTOM_GUARDRAILS_PATH).read_bytes()
-        for rule in CUSTOM_GUARDRAILS_RULES:
+        for rule in (*CUSTOM_GUARDRAILS_RULES, *PROTECTED_CONTROL_PLANE_RULES):
             with self.subTest(rule=rule):
                 assert_conserved_policy(content, (rule,))
 
@@ -224,7 +280,7 @@ class InstalledContractTests(unittest.TestCase):
             with self.subTest(phrase=phrase): self.assertIn(phrase, migration)
 
     def test_installed_markdown_links_resolve_in_consumer_namespace(self):
-        assert_consumer_links(REPOSITORY, absent_optional_claude=True)
+        assert_consumer_links(REPOSITORY)
 
     def test_archived_governance_and_claude_files_preserve_cleanup_baseline(self):
         paths = git(REPOSITORY, 'ls-tree', '-r', '--name-only', ARCHIVE_BASELINE, '--', '.backup/').decode('utf-8').splitlines()
@@ -235,7 +291,7 @@ class InstalledContractTests(unittest.TestCase):
                 self.assertEqual(committed.replace(b'\r\n', b'\n'), (REPOSITORY / relative).read_bytes().replace(b'\r\n', b'\n'))
         for absent in ('repository-review-protocol.md', 'repository-maintenance-orchestrator-recovery-backlog.md',
                        'backlog-workflow-documentation.md', 'evidence-ledger-documentation.md',
-                       'claude-code-handoff', 'CLAUDE.md', 'CLAUDE.local.md'):
+                       'claude-code-handoff', 'CLAUDE.local.md'):
             with self.subTest(absent=absent): self.assertFalse((REPOSITORY / absent).exists())
 
     def test_active_guardrails_do_not_restore_archived_mandatory_routes(self):
@@ -245,12 +301,7 @@ class InstalledContractTests(unittest.TestCase):
                          '* `repository-maintenance-orchestrator-recovery-backlog.md`;',
                          '* `repository-review-protocol.md`;'):
             with self.subTest(obsolete=obsolete): self.assertNotIn(obsolete, guard)
-        assert_conserved_policy(guard.encode('utf-8'), (
-            'must not be mechanically redirected into the archive as active instruction routes',
-            'Read `.agent/instructions/package/GUARDRAILS.md` and this custom GUARDRAILS companion.',
-            'Read every applicable nested `AGENTS.md` and scoped instruction file.',
-            'Do not modify or restore archived files incidentally.',
-        ))
+        assert_conserved_policy(guard.encode('utf-8'), ARCHIVE_INACTIVITY_RULES)
 
     def test_installed_review_policy_conserves_independent_approved_contracts(self):
         assert_policy_clauses((REPOSITORY / 'AGENTS.md').read_bytes(), ROUTER_REVIEW_RULES)
@@ -390,11 +441,12 @@ class SynchronizationWitnessTests(unittest.TestCase):
             self.assertFalse((root / '.agent/README.md').exists())
 
     def test_missing_selected_module_stops_dependent_resolution(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary); execute_sync(root)
-            (root / '.agent/instructions/package/TESTING.md').unlink()
-            with self.assertRaisesRegex(FileNotFoundError, 'package/TESTING.md'):
-                read_selected(root, ('ENGINEERING', 'TESTING'))
+        for name in MODULES:
+            with self.subTest(module=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); execute_sync(root)
+                (root / '.agent/instructions/package' / (name + '.md')).unlink()
+                with self.assertRaisesRegex(FileNotFoundError, 'package/' + name + r'\.md'):
+                    read_selected(root, (name,))
 
     def test_additive_package_custom_native_order_and_override_selection(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -561,17 +613,19 @@ class PolicyConservationWitnessTests(unittest.TestCase):
                 with self.subTest(path=relative), self.assertRaisesRegex(AssertionError, 'Missing conserved policy: - Do not modify unrelated worktree state'):
                     assert_conserved_policy((root / relative).read_bytes(), SHARED_GUARDRAILS_RULES)
 
-    def test_local_authorization_and_recovery_rule_loss_is_rejected(self):
+    def test_local_control_plane_authorization_and_archive_rule_loss_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / CUSTOM_GUARDRAILS_PATH
             destination.parent.mkdir(parents=True)
             original = (REPOSITORY / CUSTOM_GUARDRAILS_PATH).read_bytes()
-            for rule in (PROTECTED_PATH_AUTHORIZATION, RECOVERY_STATE_AUTHORIZATION, ARCHIVE_AUTHORITY):
+            rules = (*CUSTOM_GUARDRAILS_RULES, *PROTECTED_CONTROL_PLANE_RULES,
+                     *LOCAL_AUTHORIZATION_RULES, *ARCHIVE_INACTIVITY_RULES)
+            for rule in rules:
                 with self.subTest(rule=rule):
                     text = ' '.join(original.decode('utf-8').split())
                     destination.write_bytes(text.replace(' '.join(rule.split()), '', 1).encode('utf-8'))
                     with self.assertRaisesRegex(AssertionError, 'Missing conserved policy'):
-                        assert_conserved_policy(destination.read_bytes(), CUSTOM_GUARDRAILS_RULES)
+                        assert_conserved_policy(destination.read_bytes(), rules)
 
 
 if __name__ == '__main__':

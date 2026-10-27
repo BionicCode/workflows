@@ -1,7 +1,7 @@
 ---
-Version: 2
+Version: 3
 Created: 2026-10-13T20:27:23+00:00
-Updated: 2026-10-25T14:25:09+00:00
+Updated: 2026-10-27T21:11:01+00:00
 Author: BionicCode
 ---
 <!-- doc-metadata-presentation:start -->
@@ -147,8 +147,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Source metadata update failed.' }
 ```
 <!-- acceptance:source-metadata-update:end -->
 
-Create custom companions separately, then run this separate explicit batch. There are
-no empty CODE_REVIEW or DOTNET companions in this installation.
+The repository-owned companions in this installation are ENGINEERING, TESTING,
+GUARDRAILS and DOCUMENTATION. Initialize or update them through this separate explicit
+batch; IMPLEMENTATION, CODE_REVIEW and DOTNET companions are intentionally absent.
 
 <!-- acceptance:custom-metadata-update:start -->
 ```powershell
@@ -192,6 +193,11 @@ the empty seed. Preserve local/client content, then materialize the selected bri
 Install root AGENTS last after required modules exist. Keep CLAUDE.local byte-for-byte.
 Rematerialize whole bytes after any source correction. Never independently repair an
 enforced installation. Verify conservation before retiring legacy files.
+
+The current manual workflows installation includes the root Claude bridge and all
+three Copilot adapters. Its four local companions are repository-owned extensions
+outside the package synchronization projection. The installed Claude bridge retains
+the package seed; native Claude compatibility remains subject to the separate gate below.
 
 ## Repeatable core acceptance
 
