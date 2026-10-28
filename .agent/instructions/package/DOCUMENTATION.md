@@ -137,6 +137,10 @@ Suggested outline:
 ## Limitations / unsupported scenarios
 ```
 
+Use Markdown callouts (alerts/admonitions) where supported by the documentation renderer and where visual emphasis materially improves comprehension. Prefer GitHub-flavored alerts (`[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`) for information such as critical prerequisites, safety constraints, compatibility limitations, destructive operations, and important exceptions.
+
+Select the alert type according to its meaning. Keep callouts concise, accessible, and relevant; do not use them for ordinary prose, decorative emphasis, or information that is already sufficiently prominent. Avoid excessive callouts that dilute their significance.
+
 ---
 
 ## Choosing the right level
