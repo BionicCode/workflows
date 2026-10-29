@@ -255,6 +255,15 @@ Each specification below contains its required fields explicitly. Exact writable
 - Stop affected work on conflicting authority, missing prerequisites, ambiguous ownership/state, unavailable approved sources, stale execution context or necessary out-of-scope changes.
 - A merge must preserve operative callers and accepted commit identities. Do not enable incomplete replacement behavior.
 
+**Binding scope clarification for all pass specifications:** The prohibition on
+modifying "other pass results" protects accepted historical commits, lifecycle
+evidence, review records and unrelated artifacts. It does not prohibit modifying
+predecessor implementation artifacts when the current pass contract requires the
+modification and the current execution authorization permits it. Such changes are
+new work attributable to the current pass and never retroactively change
+predecessor acceptance. All existing scope, ownership, security, authorization and
+review constraints remain binding and are not weakened by this clarification.
+
 The draft-to-final map below preserves every provisional identity. From admission onward, final identities are stable and must not be silently renumbered or reused.
 
 | Draft pass | Final pass |
